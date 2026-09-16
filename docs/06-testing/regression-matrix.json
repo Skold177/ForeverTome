@@ -1,0 +1,708 @@
+{
+  "plan_version": 1,
+  "reviewed_on": "2026-09-16",
+  "status": "proposed",
+  "implementation_performed": false,
+  "wf_runtime_verified": false,
+  "purpose": "Documentation backlog for implementing regression protection; entries are not executable fixtures or passing test results.",
+  "invariant_document": "recording-invariants.md",
+  "wf_validation_document": "../04-validation/wf-test-plan.md",
+  "profile_policy": "Fixtures must name an explicit synthetic, source-pinned reference, or measured product/build profile. Retail captures remain Retail evidence and are kept separate from WF data. Add a WF profile only with named build evidence; passing offline or Retail tests never establishes WF runtime compatibility.",
+  "suite_ids": [
+    "contracts",
+    "replay",
+    "persistence",
+    "adversarial",
+    "package",
+    "client"
+  ],
+  "invariant_ids": [
+    "INV-01",
+    "INV-02",
+    "INV-03",
+    "INV-04",
+    "INV-05",
+    "INV-06",
+    "INV-07",
+    "INV-08",
+    "INV-09",
+    "INV-10",
+    "INV-11",
+    "INV-12",
+    "INV-13",
+    "INV-14",
+    "INV-15",
+    "INV-16"
+  ],
+  "admission_policy": "All scenarios begin planned. Register actual tests/fixtures and required CI execution as each mechanic is implemented. Importer scenarios require the future importer; client validation remains separate.",
+  "scenarios": [
+    {
+      "id": "H01",
+      "title": "Lifecycle and load order",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "package"
+      ],
+      "invariant_ids": [
+        "INV-04",
+        "INV-09"
+      ],
+      "input_summary": "Load the production manifest, deliver another addon's load notification, then our load/login and world-entry notifications.",
+      "required_result": "Initialize once at the documented boundary; preserve restored history, establish one runtime session, and avoid premature collector reads.",
+      "wf_validation_cases": [
+        "V01"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H02",
+      "title": "Profile-specific quest acceptance",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-04",
+        "INV-05",
+        "INV-15"
+      ],
+      "input_summary": "Replay the pinned R one-argument and T two-argument QUEST_ACCEPTED signatures in separate reference profiles; also select an unknown profile.",
+      "required_result": "Read the correct quest ID for each selected profile; do not guess an adapter for unknown WF identity or call actions.",
+      "wf_validation_cases": [
+        "V06"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H03",
+      "title": "Existing quests and partial enumeration",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-09"
+      ],
+      "input_summary": "Start with active quests; deliver collapsed, filtered, incomplete, and then complete quest-log snapshots.",
+      "required_result": "Create observed baselines without invented acceptances; absence in an incomplete scan does not prove removal or abandonment.",
+      "wf_validation_cases": [
+        "V07"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H04",
+      "title": "Objective progress and coalescing",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "Advance comparable counts 0 to 1 to 3, repeat unchanged snapshots, and vary legal notification coalescing.",
+      "required_result": "Record supported progress without duplicate unchanged snapshots, invented individual kills, or invented killer attribution.",
+      "wf_validation_cases": [
+        "V08",
+        "V09"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H05",
+      "title": "Quest removal, repeat runs, and layout changes",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-04",
+        "INV-05",
+        "INV-09"
+      ],
+      "input_summary": "Remove/reaccept a quest and separately replace or reorder its objective layout.",
+      "required_result": "Keep runs and layout generations separate; never subtract incompatible counters or treat every removal as abandonment.",
+      "wf_validation_cases": [
+        "V10",
+        "V12"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H06",
+      "title": "Reward panel, cancellation, and turn-in",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "Open/cancel/reopen reward dialogue, then deliver a real turn-in and removal in supported order variants.",
+      "required_result": "Only the turn-in notification establishes turn-in; dialogue closure alone does not; preserve one turn-in for that occurrence.",
+      "wf_validation_cases": [
+        "V11"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H07",
+      "title": "Manual loot, auto-loot, and repeated notifications",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "Expose slots before clearing, deliver repeated ready/open/update notifications, then close and begin a distinct interaction.",
+      "required_result": "Capture readable contents before loss, deduplicate only equivalent notifications within their interaction, and retain distinct occurrences.",
+      "wf_validation_cases": [
+        "V13"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H08",
+      "title": "Reopened loot and failed collection",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06"
+      ],
+      "input_summary": "Reopen a source with remaining items; simulate full bags and a visible slot that was not collected.",
+      "required_result": "Preserve visibility without inventing an additional kill or receipt; keep interaction identity explicit.",
+      "wf_validation_cases": [
+        "V14"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H09",
+      "title": "Area loot and unavailable source attribution",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-07",
+        "INV-15"
+      ],
+      "input_summary": "Supply verified-profile multi-source tuples, then unsupported or unreadable source results and money/currency/container slots.",
+      "required_result": "Preserve known quantities and source kinds; retain unknown attribution when unavailable; never substitute last target for loot source.",
+      "wf_validation_cases": [
+        "V15",
+        "V16"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H10",
+      "title": "Inventory moves and unrelated gains",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "Move stacks between bags, merge/split stacks, and separately simulate reward/trade gains.",
+      "required_result": "A move is not a new acquisition; inventory gains are not automatically attributed to a nearby monster.",
+      "wf_validation_cases": [
+        "V18"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H11",
+      "title": "Nested input aliasing",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-02",
+        "INV-03"
+      ],
+      "input_summary": "Queue or accept an observation, mutate its nested source tables before deferred commit, then reuse the same API/work buffer for another event.",
+      "required_result": "Both queued and committed accepted observations retain their captured values; later observations see their own new values.",
+      "wf_validation_cases": [
+        "V08",
+        "V17"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H12",
+      "title": "Consumer and exporter mutation",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-02",
+        "INV-03",
+        "INV-11"
+      ],
+      "input_summary": "Read observations through supported consumer interfaces, mutate returned nested data, and construct repeated exports.",
+      "required_result": "The store and prior observations remain unchanged; consumers cannot alter retained history through shared references.",
+      "wf_validation_cases": [
+        "V27"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H13",
+      "title": "Unit token reuse and restricted combat",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-09",
+        "INV-15"
+      ],
+      "input_summary": "Replace a target/nameplate token's GUID, remove the token, deny combat registration, and return unreadable fields.",
+      "required_result": "Discard stale entity associations; disappearance is not death; denied combat collection stays unavailable while healthy collectors continue.",
+      "wf_validation_cases": [
+        "V19",
+        "V20",
+        "V21"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H14",
+      "title": "Late, duplicate, failed, and reordered metadata",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-03",
+        "INV-06",
+        "INV-08"
+      ],
+      "input_summary": "Delay metadata across unrelated events, respond out of order, repeat callbacks, fail requests, and return a mismatched content ID.",
+      "required_result": "Append bounded enrichment only for the matching identity/context; preserve original time/location/data and record unresolved results accurately.",
+      "wf_validation_cases": [
+        "V17"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H15",
+      "title": "World transitions and position boundaries",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-07",
+        "INV-09"
+      ],
+      "input_summary": "Change maps/instances between samples, make position unavailable, and supply valid boundary coordinates including zero.",
+      "required_result": "Use the current observer/map/time context; never reuse stale coordinates or treat zero as missing or player position as creature position.",
+      "wf_validation_cases": [
+        "V04",
+        "V05"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H16",
+      "title": "Missing values, tuple arity, and localized text",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "replay",
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-01",
+        "INV-07",
+        "INV-11"
+      ],
+      "input_summary": "Supply return tuples with nil gaps/trailing nil, false, zero, empty values, UTF-8 text, markup, quotes, and line breaks.",
+      "required_result": "Keep argument positions and declared missing-data distinctions; preserve supported text through export without locale-dependent identity.",
+      "wf_validation_cases": [
+        "V25",
+        "V27"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H17",
+      "title": "Unsupported record values and readability boundary",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-01",
+        "INV-07",
+        "INV-15"
+      ],
+      "input_summary": "Supply cycles, metatables, functions, userdata, nonfinite numbers, unsupported keys, and an opaque unreadable test sentinel.",
+      "required_result": "Reject or omit according to the explicit field/record contract without persisting or formatting unreadable values; existing history remains intact.",
+      "wf_validation_cases": [
+        "V21"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H18",
+      "title": "In-memory commit fault boundaries",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-03",
+        "INV-04",
+        "INV-06",
+        "INV-10"
+      ],
+      "input_summary": "Inject catchable faults before validation/copy/append and after append before acknowledgment; retry the same internal submission.",
+      "required_result": "Keep a complete unchanged history prefix; determine committed versus uncommitted outcome, with one effect per retried submission and no partial record.",
+      "wf_validation_cases": [],
+      "fixture_paths": []
+    },
+    {
+      "id": "H19",
+      "title": "Collector error isolation",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-03",
+        "INV-10",
+        "INV-13"
+      ],
+      "input_summary": "Fail one collector/API response while delivering independent valid events; repeat failures with a bounded diagnostic budget.",
+      "required_result": "Healthy collectors continue; prior observations remain intact; errors are visible without recursive logging or unbounded growth.",
+      "wf_validation_cases": [
+        "V21",
+        "V26"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H20",
+      "title": "Capacity and event storms",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-06",
+        "INV-09",
+        "INV-13"
+      ],
+      "input_summary": "Use tiny record/byte/queue/retry limits, large text, repeated events, full diagnostics capacity, and subsequent resume.",
+      "required_result": "Stay within declared budgets, preserve retained history, report coverage loss without needing main-log space, and reset affected baselines on resume.",
+      "wf_validation_cases": [
+        "V26"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H21",
+      "title": "Save, restore, and pre-save termination",
+      "status": "planned",
+      "suites": [
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-03",
+        "INV-04",
+        "INV-09",
+        "INV-11"
+      ],
+      "input_summary": "Snapshot a simulated client save, append an unsaved suffix, discard the runtime, and restore only the saved snapshot; also test a normal second save.",
+      "required_result": "Recover the saved prefix exactly; do not claim unsaved records survived; establish a distinct new runtime without duplicating saved observations.",
+      "wf_validation_cases": [
+        "V02",
+        "V03"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H22",
+      "title": "Reload with pending metadata",
+      "status": "planned",
+      "suites": [
+        "replay",
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-04",
+        "INV-08",
+        "INV-09",
+        "INV-11"
+      ],
+      "input_summary": "Save unresolved records, restart, requeue allowed requests, and deliver stale-generation callbacks plus a fresh matching result.",
+      "required_result": "Keep original record references; ignore stale callbacks; bound retries and append only valid enrichment under the new runtime generation.",
+      "wf_validation_cases": [
+        "V02",
+        "V17"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H23",
+      "title": "Supported schema migration chains",
+      "status": "planned",
+      "suites": [
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-03",
+        "INV-11",
+        "INV-12"
+      ],
+      "input_summary": "Load independently defined supported old-version fixtures, migrate through required stages, and repeat the operation.",
+      "required_result": "Preserve semantic content/references, validate before promotion, retain a recoverable original, and make repeat migration harmless.",
+      "wf_validation_cases": [
+        "V28"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H24",
+      "title": "Migration failure and unknown newer data",
+      "status": "planned",
+      "suites": [
+        "persistence",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-10",
+        "INV-12"
+      ],
+      "input_summary": "Inject faults at each migration stage; load unknown future schemas and malformed/truncated/oversized data.",
+      "required_result": "Do not silently reset or overwrite input; report an explicit outcome and preserve the recoverable source within defined recovery limits.",
+      "wf_validation_cases": [
+        "V28"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H25",
+      "title": "Independent serialization and concurrent export",
+      "status": "planned",
+      "suites": [
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-02",
+        "INV-03",
+        "INV-07",
+        "INV-11"
+      ],
+      "input_summary": "Export a selected batch while subsequent capture proceeds; independently parse and compare every field against authored expectations.",
+      "required_result": "Keep stable batch membership/content, preserve array order/types/references/missing reasons, and catch omitted fields even if writer and reader share a bug.",
+      "wf_validation_cases": [
+        "V27"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H26",
+      "title": "Chunk completeness and integrity",
+      "status": "planned",
+      "suites": [
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-11",
+        "INV-14"
+      ],
+      "input_summary": "Present complete, missing, repeated, reordered, mismatched, corrupt, and oversized export chunks.",
+      "required_result": "Validate the declared chunk protocol; do not acknowledge incomplete or conflicting data as a complete export or clear local history.",
+      "wf_validation_cases": [
+        "V27"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H27",
+      "title": "Importer retries and identity conflicts",
+      "status": "planned",
+      "suites": [
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-04",
+        "INV-11",
+        "INV-14"
+      ],
+      "input_summary": "When an importer exists, reimport identical observations, alter content under an existing identity, interrupt batches, and send enrichments before referenced records.",
+      "required_result": "Identical data is idempotent, changed content is an explicit conflict, recovery follows declared batch policy, and reference handling is defined.",
+      "wf_validation_cases": [
+        "V27"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H28",
+      "title": "Schema parser and data-only import",
+      "status": "planned",
+      "suites": [
+        "persistence"
+      ],
+      "invariant_ids": [
+        "INV-01",
+        "INV-11",
+        "INV-14"
+      ],
+      "input_summary": "When an importer exists, submit invalid versions/types/keys/depth/lengths and text resembling executable Lua or HTML.",
+      "required_result": "Reject invalid data without execution; preserve valid text as data; leave previously imported observations unchanged.",
+      "wf_validation_cases": [
+        "V27"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H29",
+      "title": "Determinism, clocks, and session collisions",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "replay",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-04",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "Repeat identical seeds/traces, advance wall and monotonic clocks independently, use equal timestamps, and force an ID-provider collision.",
+      "required_result": "Reproduce identical outputs under identical controls; preserve distinct occurrence identity and monotonic sequence; reject or resolve collisions without overwriting history.",
+      "wf_validation_cases": [
+        "V01",
+        "V02"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H30",
+      "title": "Missing tests and swallowed failures",
+      "status": "planned",
+      "suites": [
+        "contracts",
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-16"
+      ],
+      "input_summary": "Remove a required fixture, skip a suite, discover zero tests, swallow an assertion/process failure, and leave required fake calls unconsumed.",
+      "required_result": "The runner and aggregate gate fail with the missing obligation; no required mechanic is reported protected without executed evidence.",
+      "wf_validation_cases": [],
+      "fixture_paths": []
+    },
+    {
+      "id": "H31",
+      "title": "Controlled implementation mutations",
+      "status": "planned",
+      "suites": [
+        "adversarial"
+      ],
+      "invariant_ids": [
+        "INV-02",
+        "INV-03",
+        "INV-05",
+        "INV-11",
+        "INV-16"
+      ],
+      "input_summary": "In isolated harness variants, remove a nested copy, swap a payload argument, mutate history during enrichment, or omit an exported field.",
+      "required_result": "Each variant produces its intended semantic assertion failure; the ordinary implementation passes; broken variants never enter the addon package.",
+      "wf_validation_cases": [],
+      "fixture_paths": []
+    },
+    {
+      "id": "H32",
+      "title": "Package independence and dependency errors",
+      "status": "planned",
+      "suites": [
+        "package"
+      ],
+      "invariant_ids": [
+        "INV-15",
+        "INV-16"
+      ],
+      "input_summary": "Load the actual release manifest in order under the controlled host; inspect the artifact and test missing dependencies/case-sensitive paths.",
+      "required_result": "Bootstrap exercises production files, fails clearly for broken dependencies, and excludes fixture runners, development stubs, and enabled fault hooks.",
+      "wf_validation_cases": [
+        "V01"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H33",
+      "title": "Profession and gathering evidence",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "View/learn a recipe, begin/interrupt/complete candidate crafts, queue attempts, and loot adjacent gathering or skinning sources.",
+      "required_result": "Keep catalog metadata, attempts, successful results, and loot evidence distinct; unknown recipe/source association remains unknown.",
+      "wf_validation_cases": [
+        "V22",
+        "V23"
+      ],
+      "fixture_paths": []
+    },
+    {
+      "id": "H34",
+      "title": "Gossip, vendor offers, and refreshes",
+      "status": "planned",
+      "suites": [
+        "replay"
+      ],
+      "invariant_ids": [
+        "INV-05",
+        "INV-06",
+        "INV-09"
+      ],
+      "input_summary": "Refresh/continue/close dialogue and vendor listings, change the interacting unit, and present stock/cost updates.",
+      "required_result": "Record shown options and offers with current interaction identity; do not invent selections, purchases, or relationships across stale contexts.",
+      "wf_validation_cases": [
+        "V24"
+      ],
+      "fixture_paths": []
+    }
+  ]
+}

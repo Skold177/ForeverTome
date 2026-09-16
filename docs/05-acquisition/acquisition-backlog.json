@@ -1,0 +1,639 @@
+{
+  "schema_version": 1,
+  "document_kind": "acquisition_plan",
+  "reviewed_on": "2026-09-16",
+  "product": "WF",
+  "client_available": false,
+  "client_availability_basis": "user_report",
+  "collection_performed": false,
+  "notes": [
+    "Stages are access gates, not delivery dates or verified capabilities.",
+    "Candidate table names exist in the pinned community definition inventory, not necessarily in WF.",
+    "Candidate APIs use reference-client declarations; all require WF validation.",
+    "Outputs are proposed dataset names, not existing files or a normative database schema.",
+    "A01 enables inventory/provenance; individual domain parsing failures must not block independent supported domains."
+  ],
+  "stages": {
+    "download": "Readable installed client content is available.",
+    "login": "Character login and ordinary-addon access have been validated.",
+    "gameplay": "The relevant interaction or content is accessible."
+  },
+  "priorities": {
+    "P0": "Preserve inputs and establish core catalogs.",
+    "P1": "Add guide-relevant definitions and gameplay relationships.",
+    "P2": "Extend optional systems and collection breadth."
+  },
+  "domains": [
+    {
+      "id": "A01",
+      "domain": "build_and_api_surface",
+      "priority": "P0",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [],
+      "candidate_tables": [],
+      "candidate_apis": [],
+      "outputs": [
+        "build",
+        "artifacts",
+        "api_functions",
+        "api_events",
+        "api_structures"
+      ],
+      "source_ids": [
+        "R-BUILD",
+        "R-EVENT",
+        "D-CASC"
+      ],
+      "acceptance": "Preserve build identity, readable source artifacts, hashes, file/table inventory and permission candidates."
+    },
+    {
+      "id": "A02",
+      "domain": "character_taxonomy",
+      "priority": "P0",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "ChrClasses",
+        "ChrRaces",
+        "ChrSpecialization",
+        "SkillLine",
+        "SkillLineAbility"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "classes",
+        "races",
+        "specializations",
+        "skills"
+      ],
+      "source_ids": [
+        "D-DBD"
+      ],
+      "acceptance": "Retain separate class, race, specialization and skill identities; distinguish definitions from playable combinations."
+    },
+    {
+      "id": "A03",
+      "domain": "spells_and_abilities",
+      "priority": "P0",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Spell",
+        "SpellName",
+        "SpellMisc",
+        "SpellEffect",
+        "SpellAuraOptions",
+        "SpellPower",
+        "SpellCooldowns",
+        "SpellRange",
+        "SpellDuration",
+        "SpellCastTimes",
+        "SpellDescriptionVariables",
+        "SkillLineAbility"
+      ],
+      "candidate_apis": [
+        "C_SpellBook.GetNumSpellBookSkillLines",
+        "C_SpellBook.GetSpellBookSkillLineInfo",
+        "C_SpellBook.GetSpellBookItemInfo",
+        "C_Spell.GetSpellInfo",
+        "C_Spell.GetSpellDescription",
+        "C_Spell.RequestLoadSpellData"
+      ],
+      "outputs": [
+        "spells",
+        "spell_effects",
+        "spell_costs",
+        "spell_links",
+        "spell_ui_samples"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-SPELL"
+      ],
+      "acceptance": "Preserve all available effects/costs and symbolic text; keep computed character-specific samples separate."
+    },
+    {
+      "id": "A04",
+      "domain": "talent_trees",
+      "priority": "P0",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Talent",
+        "TalentTab",
+        "TraitTree",
+        "TraitNode",
+        "TraitEdge",
+        "TraitNodeEntry",
+        "TraitDefinition",
+        "TraitNodeXTraitNodeEntry",
+        "TraitNodeXTraitCond",
+        "TraitCond",
+        "TraitCost"
+      ],
+      "candidate_apis": [
+        "C_ClassTalents.GetActiveConfigID",
+        "C_Traits.GetConfigInfo",
+        "C_Traits.GetTreeNodes",
+        "C_Traits.GetNodeInfo",
+        "C_Traits.GetEntryInfo",
+        "C_Traits.GetDefinitionInfo",
+        "C_Traits.GetTreeInfo",
+        "C_Traits.GetNodeCost",
+        "C_Traits.GetConditionInfo"
+      ],
+      "outputs": [
+        "talent_trees",
+        "talent_nodes",
+        "talent_entries",
+        "talent_edges",
+        "talent_costs",
+        "talent_conditions",
+        "talent_configuration_samples"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-TALENT"
+      ],
+      "acceptance": "Preserve choices, rank links, edge semantics, costs, conditions and layout; validate a reconstructed tree against an exposed UI."
+    },
+    {
+      "id": "A05",
+      "domain": "world_structure",
+      "priority": "P0",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Map",
+        "AreaTable",
+        "UiMap",
+        "UiMapAssignment",
+        "UiMapArt",
+        "WorldMapArea",
+        "MapDifficulty",
+        "Difficulty"
+      ],
+      "candidate_apis": [
+        "C_Map.GetMapInfo",
+        "C_Map.GetMapChildrenInfo"
+      ],
+      "outputs": [
+        "maps",
+        "areas",
+        "ui_maps",
+        "map_relationships",
+        "map_art",
+        "coordinate_mappings"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-MAP"
+      ],
+      "acceptance": "Keep internal maps, UI maps, areas and floors distinct; mark unverified coordinate transforms."
+    },
+    {
+      "id": "A06",
+      "domain": "items_and_equipment",
+      "priority": "P0",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Item",
+        "ItemSparse",
+        "ItemEffect",
+        "ItemSet",
+        "ItemAppearance",
+        "ItemModifiedAppearance"
+      ],
+      "candidate_apis": [
+        "C_Item.GetItemInfo",
+        "C_Item.RequestLoadItemDataByID"
+      ],
+      "outputs": [
+        "items",
+        "item_effects",
+        "item_sets",
+        "item_set_members",
+        "item_variants",
+        "item_appearance_links"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-ITEM"
+      ],
+      "acceptance": "Preserve definitions, effects, sets and variants; do not assign acquisition sources from presence in files."
+    },
+    {
+      "id": "A07",
+      "domain": "professions_and_recipes",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "SkillLine",
+        "SkillLineAbility",
+        "SpellReagents",
+        "SpellReagentsCurrency",
+        "SpellEffect",
+        "SpellFocusObject",
+        "CraftingData"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "professions",
+        "recipes",
+        "recipe_reagents",
+        "recipe_outputs",
+        "recipe_learning_observations",
+        "craft_result_observations"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-PROFESSION",
+        "T-PROFESSION"
+      ],
+      "acceptance": "Identify WF's actual profession system and preserve reagent/output alternatives; gameplay validates learning and results."
+    },
+    {
+      "id": "A08",
+      "domain": "quests",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "QuestV2",
+        "QuestInfo",
+        "QuestLine",
+        "QuestLineXQuest",
+        "QuestObjective",
+        "QuestPackageItem"
+      ],
+      "candidate_apis": [
+        "C_QuestLog.GetQuestObjectives",
+        "C_GossipInfo.GetAvailableQuests"
+      ],
+      "outputs": [
+        "quests",
+        "quest_definition_fragments",
+        "quest_objectives",
+        "quest_reward_options",
+        "quest_relationships"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-QUEST",
+        "R-GOSSIP"
+      ],
+      "acceptance": "Import useful fragments with coverage labels; distinguish native objective IDs, runtime indices and observed quest runs."
+    },
+    {
+      "id": "A09",
+      "domain": "creatures_and_npcs",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Creature",
+        "CreatureDisplayInfo",
+        "CreatureModelData",
+        "CreatureFamily",
+        "CreatureType"
+      ],
+      "candidate_apis": [
+        "UnitGUID",
+        "UnitName"
+      ],
+      "outputs": [
+        "creatures",
+        "creature_displays",
+        "creature_relationships",
+        "npc_sightings"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-UNIT"
+      ],
+      "acceptance": "Retain separate creature/display/model identities; do not infer complete server templates, spawns or services."
+    },
+    {
+      "id": "A10",
+      "domain": "world_objects",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "GameObjects",
+        "GameObjectDisplayInfo"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "world_objects",
+        "object_displays",
+        "packaged_placements",
+        "object_interaction_observations"
+      ],
+      "source_ids": [
+        "D-DBD"
+      ],
+      "acceptance": "Label packaged definitions/placements separately from active nodes, loot and observer-location samples."
+    },
+    {
+      "id": "A11",
+      "domain": "factions_and_reputation",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Faction",
+        "FactionTemplate"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "factions",
+        "faction_templates",
+        "reputation_observations"
+      ],
+      "source_ids": [
+        "D-DBD"
+      ],
+      "acceptance": "Keep faction templates, reputation entities and observed standings/rewards distinct."
+    },
+    {
+      "id": "A12",
+      "domain": "travel",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "TaxiNodes",
+        "TaxiPath",
+        "TaxiPathNode",
+        "WorldSafeLocs",
+        "AreaPOI"
+      ],
+      "candidate_apis": [
+        "C_TaxiMap.GetAllTaxiNodes"
+      ],
+      "outputs": [
+        "travel_nodes",
+        "travel_paths",
+        "travel_path_points",
+        "world_destinations",
+        "travel_observations"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-TRAVEL"
+      ],
+      "acceptance": "Preserve directed paths and ordered points; contextual route visibility, cost and timing require observations."
+    },
+    {
+      "id": "A13",
+      "domain": "instances_and_encounters",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "MapDifficulty",
+        "Difficulty",
+        "LFGDungeons",
+        "DungeonEncounter",
+        "JournalEncounter",
+        "JournalEncounterCreature",
+        "JournalEncounterItem"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "instances",
+        "instance_difficulties",
+        "encounters",
+        "journal_relationships"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-MAP"
+      ],
+      "acceptance": "Keep journal declarations separate from active encounters and witnessed drops; report absent journal coverage."
+    },
+    {
+      "id": "A14",
+      "domain": "vendors_and_trainers",
+      "priority": "P1",
+      "earliest_stage": "gameplay",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "ItemExtendedCost"
+      ],
+      "candidate_apis": [
+        "C_MerchantFrame.GetItemInfo"
+      ],
+      "outputs": [
+        "vendor_offers",
+        "trainer_offers",
+        "service_interaction_observations"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "R-MERCHANT"
+      ],
+      "acceptance": "Capture opened permitted views with NPC, price, bundle, stock, eligibility and time; no purchases or training are needed."
+    },
+    {
+      "id": "A15",
+      "domain": "loot_and_acquisition",
+      "priority": "P1",
+      "earliest_stage": "gameplay",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [],
+      "candidate_apis": [],
+      "outputs": [
+        "loot_observations",
+        "receipt_observations",
+        "acquisition_relationships"
+      ],
+      "source_ids": [
+        "R-LOOT",
+        "R-ITEM"
+      ],
+      "acceptance": "Keep visibility, explicit sources, receipt and acquisition method separate; no assumed complete server loot table."
+    },
+    {
+      "id": "A16",
+      "domain": "currencies",
+      "priority": "P2",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "CurrencyTypes"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "currencies",
+        "currency_cost_links",
+        "currency_observations"
+      ],
+      "source_ids": [
+        "D-DBD"
+      ],
+      "acceptance": "Separate definitions from balances, transactions and contextual caps."
+    },
+    {
+      "id": "A17",
+      "domain": "achievements",
+      "priority": "P2",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Achievement",
+        "Criteria",
+        "CriteriaTree"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "achievements",
+        "achievement_criteria",
+        "criteria_edges"
+      ],
+      "source_ids": [
+        "D-DBD"
+      ],
+      "acceptance": "Preserve nested criteria/operator meaning and record whether WF actually exposes the system."
+    },
+    {
+      "id": "A18",
+      "domain": "collections",
+      "priority": "P2",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [
+        "Mount",
+        "MountXDisplay",
+        "BattlePetSpecies"
+      ],
+      "candidate_apis": [],
+      "outputs": [
+        "mounts",
+        "pet_species",
+        "collection_relationships"
+      ],
+      "source_ids": [
+        "D-DBD"
+      ],
+      "acceptance": "Distinguish definitions, summon spells, source descriptions and ownership; report absent systems."
+    },
+    {
+      "id": "A19",
+      "domain": "localization_and_assets",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [],
+      "candidate_apis": [],
+      "outputs": [
+        "localized_strings",
+        "asset_references"
+      ],
+      "source_ids": [
+        "D-DBD",
+        "D-CASC"
+      ],
+      "acceptance": "Preserve original locale text/tokens and asset identifiers; bulk media remains outside the code repository."
+    },
+    {
+      "id": "A20",
+      "domain": "new_wf_systems",
+      "priority": "P1",
+      "earliest_stage": "download",
+      "status": "planned",
+      "wf_verified": false,
+      "requires": [
+        "A01"
+      ],
+      "candidate_tables": [],
+      "candidate_apis": [],
+      "outputs": [
+        "discovered_systems",
+        "system_investigations"
+      ],
+      "source_ids": [
+        "R-EVENT",
+        "D-DBD"
+      ],
+      "acceptance": "Inventory new namespaces/modules/tables and define validation actions before assigning semantics."
+    }
+  ]
+}

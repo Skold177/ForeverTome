@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "description": "Invented documentation example, not a WF trace or validated API output. IDs, identity strings, names, locations, rewards and timings are fictional. Selected observations only; not an exhaustive notification stream.",
+  "session": {
+    "session_id": "example-session-001",
+    "product": "WF",
+    "client": {
+      "version": "SYNTHETIC",
+      "build": "SYNTHETIC",
+      "interface_version": null,
+      "project_id": null,
+      "locale": "enUS"
+    },
+    "addon_version": "documentation-example",
+    "adapter_id": "synthetic-reference-example",
+    "capabilities": {
+      "quests": {
+        "status": "wf_unverified"
+      },
+      "loot_visibility": {
+        "status": "wf_unverified"
+      },
+      "loot_source_mapping": {
+        "status": "wf_unverified"
+      },
+      "combat_death_feed": {
+        "status": "wf_unverified"
+      },
+      "item_metadata": {
+        "status": "wf_unverified"
+      }
+    }
+  },
+  "observations": [
+    {
+      "observation_id": "example-session-001:1",
+      "session_id": "example-session-001",
+      "sequence": 1,
+      "kind": "quest.accepted",
+      "observed_at_server_s": 1789581600,
+      "elapsed_s": 0,
+      "capture": {
+        "event": "QUEST_ACCEPTED"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.45,
+        "y": 0.62,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 0
+      },
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1"
+      },
+      "evidence": {
+        "method": "direct_event"
+      },
+      "related_observation_ids": [],
+      "missing_fields": {}
+    },
+    {
+      "observation_id": "example-session-001:2",
+      "session_id": "example-session-001",
+      "sequence": 2,
+      "kind": "quest.snapshot",
+      "observed_at_server_s": 1789581600,
+      "elapsed_s": 0.2,
+      "capture": {
+        "event": "QUEST_LOG_UPDATE",
+        "api": "C_QuestLog.GetQuestObjectives",
+        "trigger_elapsed_s": 0.1,
+        "sampled_elapsed_s": 0.2
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.45,
+        "y": 0.62,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 0.2
+      },
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1",
+        "layout_revision": 1,
+        "complete_snapshot": true,
+        "objectives": [
+          {
+            "index": 1,
+            "text": "Recover example field notes",
+            "type": "item",
+            "finished": false,
+            "num_fulfilled": 0,
+            "num_required": 2
+          }
+        ]
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [
+        "example-session-001:1"
+      ],
+      "missing_fields": {}
+    },
+    {
+      "observation_id": "example-session-001:3",
+      "session_id": "example-session-001",
+      "sequence": 3,
+      "kind": "unit.sighting",
+      "observed_at_server_s": 1789581625,
+      "elapsed_s": 25,
+      "capture": {
+        "event": "PLAYER_TARGET_CHANGED",
+        "api": "UnitGUID, UnitName"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.47,
+        "y": 0.63,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 25
+      },
+      "data": {
+        "entity_id": "SYNTHETIC-CREATURE-A",
+        "entity_kind": "Creature",
+        "name": "Example Marsh Stalker",
+        "unit_token": "target"
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [],
+      "missing_fields": {
+        "data.creature_template_id": "unsupported"
+      }
+    },
+    {
+      "observation_id": "example-session-001:4",
+      "session_id": "example-session-001",
+      "sequence": 4,
+      "kind": "quest.snapshot",
+      "observed_at_server_s": 1789581630,
+      "elapsed_s": 30.2,
+      "capture": {
+        "event": "QUEST_LOG_UPDATE",
+        "api": "C_QuestLog.GetQuestObjectives",
+        "trigger_elapsed_s": 30,
+        "sampled_elapsed_s": 30.2
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.472,
+        "y": 0.631,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 30.2
+      },
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1",
+        "layout_revision": 1,
+        "complete_snapshot": true,
+        "objectives": [
+          {
+            "index": 1,
+            "text": "Recover example field notes",
+            "type": "item",
+            "finished": false,
+            "num_fulfilled": 1,
+            "num_required": 2
+          }
+        ]
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [
+        "example-session-001:2"
+      ],
+      "missing_fields": {}
+    },
+    {
+      "observation_id": "example-session-001:5",
+      "session_id": "example-session-001",
+      "sequence": 5,
+      "kind": "quest.objective_delta",
+      "observed_at_server_s": 1789581630,
+      "elapsed_s": 30.3,
+      "capture": {
+        "method": "snapshot_comparison"
+      },
+      "location": null,
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1",
+        "layout_revision": 1,
+        "objective_index": 1,
+        "before": {
+          "num_fulfilled": 0,
+          "finished": false
+        },
+        "after": {
+          "num_fulfilled": 1,
+          "finished": false
+        }
+      },
+      "evidence": {
+        "method": "snapshot_diff"
+      },
+      "related_observation_ids": [
+        "example-session-001:2",
+        "example-session-001:4"
+      ],
+      "missing_fields": {
+        "data.causal_entity": "not_observed"
+      }
+    },
+    {
+      "observation_id": "example-session-001:6",
+      "session_id": "example-session-001",
+      "sequence": 6,
+      "kind": "loot.visible",
+      "observed_at_server_s": 1789581631,
+      "elapsed_s": 31,
+      "capture": {
+        "event": "LOOT_OPENED",
+        "api": "GetLootSlotInfo, GetLootSlotLink"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.472,
+        "y": 0.631,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 31
+      },
+      "data": {
+        "loot_session_id": "example-loot-1",
+        "slot": 1,
+        "slot_revision": 1,
+        "slot_kind": "item",
+        "item_id": 990101,
+        "quantity": 1,
+        "sources": []
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [],
+      "missing_fields": {
+        "data.sources": "unknown_source",
+        "data.receipt": "not_observed"
+      }
+    },
+    {
+      "observation_id": "example-session-001:7",
+      "session_id": "example-session-001",
+      "sequence": 7,
+      "kind": "relationship.candidate",
+      "observed_at_server_s": 1789581631,
+      "elapsed_s": 31.1,
+      "capture": {
+        "method": "candidate_association"
+      },
+      "location": null,
+      "data": {
+        "relationship": "unit_associated_with_objective_progress",
+        "rule_id": "illustrative_temporal_proximity",
+        "rule_version": 1,
+        "status": "unresolved",
+        "alternatives": [
+          "shared quest credit",
+          "another action between snapshots"
+        ]
+      },
+      "evidence": {
+        "method": "temporal_candidate"
+      },
+      "related_observation_ids": [
+        "example-session-001:3",
+        "example-session-001:4",
+        "example-session-001:5"
+      ],
+      "missing_fields": {}
+    },
+    {
+      "observation_id": "example-session-001:8",
+      "session_id": "example-session-001",
+      "sequence": 8,
+      "kind": "quest.snapshot",
+      "observed_at_server_s": 1789581690,
+      "elapsed_s": 90,
+      "capture": {
+        "event": "QUEST_LOG_UPDATE",
+        "api": "C_QuestLog.GetQuestObjectives"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.49,
+        "y": 0.64,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 90
+      },
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1",
+        "layout_revision": 1,
+        "complete_snapshot": true,
+        "objectives": [
+          {
+            "index": 1,
+            "text": "Recover example field notes",
+            "type": "item",
+            "finished": true,
+            "num_fulfilled": 2,
+            "num_required": 2
+          }
+        ]
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [
+        "example-session-001:4"
+      ],
+      "missing_fields": {}
+    },
+    {
+      "observation_id": "example-session-001:9",
+      "session_id": "example-session-001",
+      "sequence": 9,
+      "kind": "quest.ready",
+      "observed_at_server_s": 1789581690,
+      "elapsed_s": 90.1,
+      "capture": {
+        "event": "QUEST_LOG_UPDATE",
+        "api": "C_QuestLog.IsComplete"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.49,
+        "y": 0.64,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 90.1
+      },
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1",
+        "ready": true
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [
+        "example-session-001:8"
+      ],
+      "missing_fields": {}
+    },
+    {
+      "observation_id": "example-session-001:10",
+      "session_id": "example-session-001",
+      "sequence": 10,
+      "kind": "interaction.snapshot",
+      "observed_at_server_s": 1789581720,
+      "elapsed_s": 120,
+      "capture": {
+        "event": "QUEST_COMPLETE",
+        "api": "GetQuestID"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.43,
+        "y": 0.6,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 120
+      },
+      "data": {
+        "interaction_id": "example-interaction-2",
+        "interaction_type": "quest_reward_panel",
+        "quest_id": 990001
+      },
+      "evidence": {
+        "method": "direct_event"
+      },
+      "related_observation_ids": [
+        "example-session-001:9"
+      ],
+      "missing_fields": {
+        "data.giver_entity": "not_observed"
+      }
+    },
+    {
+      "observation_id": "example-session-001:11",
+      "session_id": "example-session-001",
+      "sequence": 11,
+      "kind": "quest.turned_in",
+      "observed_at_server_s": 1789581725,
+      "elapsed_s": 125,
+      "capture": {
+        "event": "QUEST_TURNED_IN"
+      },
+      "location": {
+        "status": "available",
+        "subject": "player",
+        "coordinate_system": "ui_map_normalized",
+        "ui_map_id": 990201,
+        "x": 0.43,
+        "y": 0.6,
+        "method": "C_Map.GetPlayerMapPosition",
+        "sampled_elapsed_s": 125
+      },
+      "data": {
+        "quest_id": 990001,
+        "quest_run_id": "example-quest-run-1",
+        "xp_reward": 100,
+        "money_reward": 50
+      },
+      "evidence": {
+        "method": "direct_event"
+      },
+      "related_observation_ids": [
+        "example-session-001:1",
+        "example-session-001:10"
+      ],
+      "missing_fields": {
+        "data.selected_item_reward": "not_observed",
+        "data.followup_quest": "not_observed"
+      }
+    },
+    {
+      "observation_id": "example-session-001:12",
+      "session_id": "example-session-001",
+      "sequence": 12,
+      "kind": "item.metadata",
+      "observed_at_server_s": 1789581730,
+      "elapsed_s": 130,
+      "capture": {
+        "event": "ITEM_DATA_LOAD_RESULT",
+        "api": "C_Item.GetItemInfo"
+      },
+      "location": null,
+      "data": {
+        "item_id": 990101,
+        "name": "Example Field Note",
+        "locale": "enUS",
+        "client_build": "SYNTHETIC"
+      },
+      "evidence": {
+        "method": "api_snapshot"
+      },
+      "related_observation_ids": [
+        "example-session-001:6"
+      ],
+      "missing_fields": {}
+    }
+  ]
+}
