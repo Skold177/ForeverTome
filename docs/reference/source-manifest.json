@@ -1,0 +1,686 @@
+{
+  "schema_version": 1,
+  "research_date": "2026-09-16",
+  "target_product": "World of Warcraft: Forever",
+  "target_runtime_verified": false,
+  "source_repository": "https://github.com/Gethe/wow-ui-source",
+  "notes": [
+    "source_repository names the R/T reference mirror; external acquisition-tooling entries specify their own repository and commit, and TEST entries identify external language/tooling/CI documentation by URL.",
+    "R and T are reference snapshots, not confirmed WF builds.",
+    "Source files can declare privileged APIs unavailable to ordinary addons.",
+    "No runtime test results are supplied in this documentation PR."
+  ],
+  "sources": [
+    {
+      "id": "TEST-LUA",
+      "title": "Official Lua 5.1 reference manual",
+      "url": "https://www.lua.org/manual/5.1/manual.html",
+      "kind": "official_language_documentation",
+      "scope": "Language baseline for references, nil fields, multiple returns, and metatables; not proof of WF runtime version or native behavior.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "TEST-LUAUNIT",
+      "title": "LuaUnit upstream project and documentation",
+      "url": "https://github.com/bluebird75/luaunit",
+      "kind": "upstream_tool_documentation",
+      "scope": "Candidate Lua assertion/reporting framework; implementation must pin a dependency revision. Not installed or tested in this documentation contribution.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "TEST-GITHUB-CHECKS",
+      "title": "GitHub troubleshooting required status checks",
+      "url": "https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks",
+      "kind": "official_platform_documentation",
+      "scope": "Required check revision, skipped outcomes, filtered workflows, and merge queue triggers; no repository rules configured here.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "TEST-GITHUB-WORKFLOWS",
+      "title": "GitHub triggering a workflow",
+      "url": "https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow",
+      "kind": "official_platform_documentation",
+      "scope": "Workflow trigger/filter configuration for future CI implementation.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "R-SPELL",
+      "title": "Spell and spellbook reference APIs",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "repository": "https://github.com/Gethe/wow-ui-source",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "scope": "Spell metadata, asynchronous text/data loading, spellbook enumeration and item/skill-line structures. Reference client only.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SpellDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SpellDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SpellBookDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SpellBookDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-TALENT",
+      "title": "Trait and class talent reference APIs",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "repository": "https://github.com/Gethe/wow-ui-source",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "scope": "Configuration, tree, node, entry, definition, cost and condition readers. Does not establish which talent system WF uses.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SharedTraitsDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SharedTraitsDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ClassTalentsDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/ClassTalentsDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-TRAVEL",
+      "title": "Taxi map reference API",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "repository": "https://github.com/Gethe/wow-ui-source",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "scope": "GetAllTaxiNodes is documented in the context of the current flight master; not a guarantee of global route enumeration.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TaxiMapDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/TaxiMapDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "D-DBD",
+      "title": "Community client database definitions",
+      "kind": "community_schema_project",
+      "repository": "https://github.com/wowdev/WoWDBDefs",
+      "commit": "a5d9a7286eb185726e3cfcf10177b41d91613fc6",
+      "scope": "Candidate table-name inventory and build/layout-aware schema format. Definition directory names were checked against this revision; WF files were not inspected. Community interpretations and provisional columns are not Blizzard guarantees.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "tree_url": "https://github.com/wowdev/WoWDBDefs/tree/a5d9a7286eb185726e3cfcf10177b41d91613fc6/definitions",
+      "files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/wowdev/WoWDBDefs/blob/a5d9a7286eb185726e3cfcf10177b41d91613fc6/README.md"
+        },
+        {
+          "path": "manifest.json",
+          "url": "https://github.com/wowdev/WoWDBDefs/blob/a5d9a7286eb185726e3cfcf10177b41d91613fc6/manifest.json"
+        }
+      ]
+    },
+    {
+      "id": "D-DBCD",
+      "title": "DBCD table reader documentation",
+      "kind": "tool_author_documentation",
+      "repository": "https://github.com/wowdev/DBCD",
+      "commit": "2d50ae2633166ff5dd57e802e960f5e9e558177f",
+      "scope": "Candidate DBC/DB2 reader with definition and cache/hotfix support described by its maintainers. WF format compatibility has not been tested.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/wowdev/DBCD/blob/2d50ae2633166ff5dd57e802e960f5e9e558177f/README.md"
+        }
+      ]
+    },
+    {
+      "id": "D-CASC",
+      "title": "CascLib archive reader documentation",
+      "kind": "tool_author_documentation",
+      "repository": "https://github.com/ladislav-zezula/CascLib",
+      "commit": "2a280f5a231966dc5d1b534978dd9f9f04a374cd",
+      "scope": "Candidate CASC archive reader. No WF extraction or compatibility test has been performed.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/ladislav-zezula/CascLib/blob/2a280f5a231966dc5d1b534978dd9f9f04a374cd/README.md"
+        }
+      ]
+    },
+    {
+      "id": "R-BUILD",
+      "title": "Retail build identity",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Version pin and GetBuildInfo return contract.",
+      "files": [
+        {
+          "path": "version.txt",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/version.txt"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/BuildDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/BuildDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "T-BUILD",
+      "title": "Comparison build identity",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "classic_titan",
+      "version": "3.80.2.69815",
+      "commit": "1303c9bdbb7f320fa45db1eaee73acaae3b71fe8",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Version pin only; the relationship of this branch to WF is unconfirmed.",
+      "files": [
+        {
+          "path": "version.txt",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/version.txt"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_SharedXML/ProjectConstants.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_SharedXML/ProjectConstants.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-TOC",
+      "title": "Manifest examples",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Blizzard addon metadata, dependencies, load-on-demand and per-character saved-variable declarations. Native save timing is a separate runtime validation item.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_ClientSavedVariables/Blizzard_ClientSavedVariables.toc",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_ClientSavedVariables/Blizzard_ClientSavedVariables.toc"
+        }
+      ]
+    },
+    {
+      "id": "R-LIFECYCLE",
+      "title": "Addon and world lifecycle",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "ADDON_LOADED and login, world transition, and logout payloads.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SystemDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SystemDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-EVENT",
+      "title": "Event subscription APIs",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Event validity, frame event registration, unit-event registration, and unregistration.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/EventUtilsDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/EventUtilsDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SimpleFrameAPIDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SimpleFrameAPIDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-SECRET",
+      "title": "Value-access and secrecy APIs",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "issecretvalue, canaccessvalue, canaccesstable and their declared access rules.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-COMBAT",
+      "title": "Retail combat-log restrictions",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Restricted combat-log events and the secure-only current-event reader.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CombatLogDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/CombatLogDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CombatLogSecureDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/CombatLogSecureDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "T-COMBAT",
+      "title": "Comparison combat-log interface",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "classic_titan",
+      "version": "3.80.2.69815",
+      "commit": "1303c9bdbb7f320fa45db1eaee73acaae3b71fe8",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Restricted namespaced reader, historical alias, and death/credit subevent handling. Built-in UI access is not ordinary-addon permission.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CombatLogDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_APIDocumentationGenerated/CombatLogDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_DeprecatedCombatLog/Deprecated_CombatLog.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_DeprecatedCombatLog/Deprecated_CombatLog.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_CombatLog/Classic/Blizzard_CombatLog.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_CombatLog/Classic/Blizzard_CombatLog.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-QUEST",
+      "title": "Retail quest log",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Quest functions, objective structures and event payloads.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestLogDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestLogDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "T-QUEST",
+      "title": "Comparison quest log",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "classic_titan",
+      "version": "3.80.2.69815",
+      "commit": "1303c9bdbb7f320fa45db1eaee73acaae3b71fe8",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Two-argument QUEST_ACCEPTED and legacy quest-log call sites.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestLogDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestLogDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_UIPanels_Game/Vanilla/QuestInfo.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_UIPanels_Game/Vanilla/QuestInfo.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-OFFER",
+      "title": "Quest interaction lifecycle",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "QUEST_PROGRESS, QUEST_FINISHED and related dialogue events.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestOfferDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestOfferDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-UI",
+      "title": "Quest and loot UI call sites",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Actual use of quest dialogue functions and global loot slot readers. Call sites are not exhaustive native API declarations.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestInfo.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestInfo.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-LOOT",
+      "title": "Retail loot events",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Loot session, slot, receipt/toast and encounter events.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/LootDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/LootDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "T-LOOT",
+      "title": "Comparison loot events",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "classic_titan",
+      "version": "3.80.2.69815",
+      "commit": "1303c9bdbb7f320fa45db1eaee73acaae3b71fe8",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "LOOT_OPENED has one declared argument in this snapshot.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/LootDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_APIDocumentationGenerated/LootDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-ITEM",
+      "title": "Item metadata and loading",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "C_Item readers, nullable metadata, load requests and result events.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ItemDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/ItemDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-BAGS",
+      "title": "Container state",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "C_Container.GetContainerItemInfo and BAG_UPDATE_DELAYED.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ContainerDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/ContainerDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-CHAT",
+      "title": "Loot chat event",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "CHAT_MSG_LOOT uses a generic multi-field chat payload; do not assume text is a creature-source record.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ChatInfoDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/ChatInfoDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-MAP",
+      "title": "Maps and instance context",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "C_Map player/group position limits, map identity and GetInstanceInfo returns.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/MapDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/MapDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/InstanceDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/InstanceDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-UNIT",
+      "title": "Unit identity and spellcasts",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Unit getters, identity restrictions, target/mouseover/nameplate events and spellcast payloads.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/NamePlateManagerDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/NamePlateManagerDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-TIME",
+      "title": "Observation clocks",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "GetServerTime, GetTime and GetTimePreciseSec declarations; epoch/clock behavior must be checked when interpreting durations.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SystemTimeDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SystemTimeDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/OsDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/OsDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-PROFESSION",
+      "title": "Retail professions",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Recipe info/schematic APIs, craft-result structures, recipe and profession events.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TradeSkillUIDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/TradeSkillUIDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TradeSkillUITypesDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/TradeSkillUITypesDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/SkillInfoDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/SkillInfoDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "T-PROFESSION",
+      "title": "Comparison professions",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "classic_titan",
+      "version": "3.80.2.69815",
+      "commit": "1303c9bdbb7f320fa45db1eaee73acaae3b71fe8",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Smaller C_TradeSkillUI surface and legacy trade/craft UI readers.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TradeSkillUIDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_APIDocumentationGenerated/TradeSkillUIDocumentation.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_TradeSkillUI/Vanilla/Blizzard_TradeSkillUI.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_TradeSkillUI/Vanilla/Blizzard_TradeSkillUI.lua"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_TradeSkillUI/Vanilla/Blizzard_TradeSkillUI.xml",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_TradeSkillUI/Vanilla/Blizzard_TradeSkillUI.xml"
+        },
+        {
+          "path": "Interface/AddOns/Blizzard_CraftUI/Vanilla/Blizzard_CraftUI.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/1303c9bdbb7f320fa45db1eaee73acaae3b71fe8/Interface/AddOns/Blizzard_CraftUI/Vanilla/Blizzard_CraftUI.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-GOSSIP",
+      "title": "Gossip and quest offers",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "Readable dialogue, offered/active quest lists and interaction events.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "R-MERCHANT",
+      "title": "Merchant inventory",
+      "kind": "blizzard_client_source_via_community_mirror",
+      "branch": "live",
+      "version": "12.1.0.69814",
+      "commit": "4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false,
+      "scope": "C_MerchantFrame.GetItemInfo and merchant interaction events.",
+      "files": [
+        {
+          "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/MerchantFrameDocumentation.lua",
+          "url": "https://github.com/Gethe/wow-ui-source/blob/4e3cbb8c5609e4bfc332c0aebbfa4d79731fab59/Interface/AddOns/Blizzard_APIDocumentationGenerated/MerchantFrameDocumentation.lua"
+        }
+      ]
+    },
+    {
+      "id": "B-WF",
+      "title": "Blizzard WF announcement",
+      "url": "https://worldofwarcraft.blizzard.com/en-gb/news/24302093",
+      "kind": "official_product_announcement",
+      "scope": "Product context and announced beta start; no API compatibility claim. Search-index text was available; direct English page retrieval failed during research.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "B-COMBAT",
+      "title": "Blizzard combat philosophy and addon disarmament",
+      "url": "https://worldofwarcraft.blizzard.com/fr-fr/news/24246290",
+      "kind": "official_developer_article",
+      "scope": "Retail combat information and secret-value design. French official article was retrieved; it is not a WF API specification.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "B-POLICY",
+      "title": "Blizzard UI Add-On Development Policy",
+      "url": "https://us.forums.blizzard.com/en/wow/t/ui-add-on-development-policy/24534/4",
+      "kind": "official_policy",
+      "scope": "Policy text attributed to Blizzard staff; distribution and performance requirements.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    },
+    {
+      "id": "H-LOOT-SOURCE",
+      "title": "Original developer trace of GetLootSourceInfo",
+      "url": "https://www.wowinterface.com/forums/archive/index.php/t-43091.html",
+      "kind": "historical_firsthand_developer_observation",
+      "scope": "Ketho's 2012 beta trace shows alternating GUID/quantity returns for area loot. Historical evidence only; it is not a current native declaration or WF compatibility test.",
+      "reviewed_on": "2026-09-16",
+      "wf_runtime_verified": false
+    }
+  ]
+}
