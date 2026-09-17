@@ -47,7 +47,7 @@ SUPPORTED_KINDS = frozenset({
     "profession.snapshot", "recipe.learned", "recipe.metadata", "craft.result",
     "quest.baseline", "quest.metadata_unavailable", "quest.snapshot", "quest.objective_delta",
     "quest.ready", "quest.log_scope", "quest.dialogue", "quest.accepted", "quest.turned_in",
-    "quest.removed", "quest.metadata", "interaction.snapshot", "item.metadata_unresolved",
+    "quest.removed", "quest.metadata", "quest.reward_received", "interaction.snapshot", "item.metadata_unresolved",
     "item.metadata", "item.received", "loot.visible", "loot.opened", "loot.snapshot",
     "loot.slot_unavailable", "loot.slot_cleared", "loot.closed", "inventory.snapshot", "inventory.delta",
 })

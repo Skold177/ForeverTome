@@ -229,6 +229,48 @@ local function itemLoaded(event, itemID, success)
     end
 end
 
+local function questReward(event, questID, link, quantity)
+    if not FT.Profile.supported or not FT.Profile.quest_loot_received then
+        return
+    end
+    questID  = number(questID, 1, 2147483647)
+    link     = FT.Value(link, "string")
+    quantity = number(quantity, 1, 1000000000)
+    if not questID or not link or not quantity then
+        return
+    end
+    local payload = string.match(link, "^|c%x%x%x%x%x%x%x%x|H(item:[^|]+)|h%[[^|]*%]|h|r$")
+        or string.match(link, "^|cn[%a_][%w_]*:|H(item:[^|]+)|h%[[^|]*%]|h|r$")
+        or string.match(link, "^|H(item:[^|]+)|h%[[^|]*%]|h$")
+        or string.match(link, "^(item:[%d:%-]+)$")
+    local itemID = payload and number(FT.ItemID(payload), 1, 2147483647)
+    if not itemID then
+        return
+    end
+    for field in string.gmatch(payload, ":([^:]*)") do
+        if field ~= "" and not string.match(field, "^%-?%d+$") then
+            return
+        end
+    end
+    local runID, turninID, dialogueID = FT.QuestRewardContext(questID)
+    local related                    = {}
+    local missing                    = {}
+    if turninID then
+        related[#related + 1] = turninID
+    end
+    if dialogueID then
+        related[#related + 1] = dialogueID
+    end
+    if not runID then
+        missing.quest_run_id = "not_observed"
+    end
+    local observationID = FT.Emit("quest.reward_received", {
+        quest_id = questID, quest_run_id = runID, item_id = itemID, link = link, quantity = quantity,
+        recipient = "local_player", source_status = "quest_event",
+    }, event, "direct_event", related, missing)
+    FT.RequestItem(itemID, link, observationID)
+end
+
 local function packValues(...)
     return { n = select("#", ...), ... }
 end
@@ -734,6 +776,7 @@ FT.On("LOOT_CLOSED", function(event)
 end)
 FT.On("ITEM_DATA_LOAD_RESULT", itemLoaded)
 FT.On("GET_ITEM_INFO_RECEIVED", itemLoaded)
+FT.On("QUEST_LOOT_RECEIVED", questReward)
 FT.On("CHAT_MSG_LOOT", localReceipt)
 FT.On("BAG_UPDATE_DELAYED", scheduleInventory)
 FT.On("PLAYER_LOGIN", scheduleInventory)

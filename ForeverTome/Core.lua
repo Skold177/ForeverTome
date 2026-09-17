@@ -1,6 +1,6 @@
 local _, FT = ...
 
-FT.VERSION = "0.2.1"
+FT.VERSION = "0.2.2"
 FT.SCHEMA  = 1
 FT.LIMITS  = {
     records = 60000, bytes = 48 * 1024 * 1024, sessions = 512,
@@ -18,7 +18,7 @@ spell.metadata spell.succeeded profession.snapshot recipe.learned recipe.metadat
 spell.metadata_unavailable spell.learned spellbook.snapshot spellbook.scan spellbook.changed
 talent.metadata talent.rank talent.build talent.snapshot
 quest.baseline quest.metadata_unavailable quest.snapshot quest.objective_delta quest.ready
-quest.log_scope quest.dialogue quest.accepted quest.turned_in quest.removed quest.metadata
+quest.log_scope quest.dialogue quest.accepted quest.turned_in quest.removed quest.metadata quest.reward_received
 interaction.snapshot item.metadata_unresolved item.metadata item.received loot.visible loot.opened
 loot.snapshot loot.slot_unavailable loot.slot_cleared loot.closed inventory.snapshot inventory.delta
 ]], "%S+") do

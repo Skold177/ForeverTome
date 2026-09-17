@@ -1,6 +1,6 @@
 # Recorder implementation contract — schema 1
 
-This describes the runnable 0.2.1 addon. The original handbook, examples, acquisition backlog, and testing matrix remain research/plans; their unverified capabilities have not become runtime guarantees. The implementation uses the installed Forever Beta 1.60.1.69893 source profile, not the earlier Retail/Titan profiles.
+This describes the runnable 0.2.2 addon. The original handbook, examples, acquisition backlog, and testing matrix remain research/plans; their unverified capabilities have not become runtime guarantees. The implementation uses the installed Forever Beta 1.60.1.69893 source profile, not the earlier Retail/Titan profiles.
 
 ## Saved data
 
@@ -31,6 +31,7 @@ Each kind's fields are selected explicitly by its collector. The kind list and J
 | --- | --- |
 | Quest accepted at coordinates | Acceptance event, quest/run ID, fresh player sample |
 | Quest progressed in an area | Comparable snapshots and a linked delta at sampling time |
+| Quest awarded an item | `quest.reward_received` from the native event's quest ID, item link, and quantity; chat receipts and inventory gains remain separate evidence of potentially the same acquisition |
 | Creature observed nearby | Sighting and observer map sample; entity position only when separately returned |
 | Creature dropped an item | Unresolved; loot slots plus named target/mouseover candidates |
 | Item obtained locally | Localized client self-receipt match, separate from inventory deltas/loot slots |

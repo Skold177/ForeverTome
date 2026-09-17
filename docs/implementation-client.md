@@ -21,6 +21,7 @@ The API paths below are relative to that extraction's `raw/interface/addons/` di
 | --- | --- | --- |
 | Quests | `blizzard_apidocumentationgenerated/questlogdocumentation.lua`: `GetNumQuestLogEntries`, `GetInfo(index)`, `GetQuestObjectives(questID)`; `QUEST_ACCEPTED(questId)` at line 1312 | Modern `C_QuestLog` profile; acceptance argument 1 is the quest ID |
 | Quest outcome | Same source: `QUEST_TURNED_IN(questID, xpReward, moneyReward)`, `QUEST_REMOVED(questID, wasReplayQuest)` | Preserve turn-in separately from removal, readiness, or dialogue closure |
+| Quest item receipt | `blizzard_apidocumentationgenerated/lootdocumentation.lua:316-326`: `QUEST_LOOT_RECEIVED(questID, itemLink, quantity)`; consumed by `blizzard_framexml/mainline/alertframes.lua:717-724` | Direct quest-to-item evidence, separately recorded from reward options, generic chat receipts, and inventory deltas; native delivery remains to be verified |
 | Quest text/rewards | `blizzard_uipanels_game/mainline/questinfo.lua` and `questframe.lua` | Capture dialogue text/reward choices while open; `GetQuestLogQuestText` takes a log index |
 | Gossip | `blizzard_apidocumentationgenerated/gossipinfodocumentation.lua` | `C_GossipInfo` structured quest/option arrays and text |
 | Loot | `blizzard_apidocumentationgenerated/lootdocumentation.lua`: `LOOT_OPENED(autoLoot, isFromItem)`; mainline `lootframe.lua:236` | Slot tuple: texture, name, quantity, currency ID, quality, locked, quest-item flag, quest ID, active flag, coin flag |
