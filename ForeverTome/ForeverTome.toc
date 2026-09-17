@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: ForeverTome
+## Notes: Records gameplay evidence for the ForeverTome database.
+## Author: ForeverTome
+## Version: 0.2.0
+## SavedVariables: ForeverTomeDB
+
+Core.lua
+Compatibility.lua
+Quests.lua
+Loot.lua
+Spells.lua
+Talents.lua
+World.lua
+Bootstrap.lua

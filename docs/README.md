@@ -1,5 +1,7 @@
 # ForeverTome documentation
 
+**Implementation update (2026-09-17):** A runnable recorder, replay tests, safe export/import tool, and addon package now exist. Start with the [current README](../README.md), [implementation contract](implementation.md), and [installed-client evidence](implementation-client.md). The research chapters retain their original reference/unverified labels; planned scenarios are not claims of completed client validation.
+
 This handbook explains how the WoW addon API works and how ForeverTome can use it to record useful gameplay observations. **WF** means World of Warcraft: Forever throughout.
 
 It also includes a [client acquisition plan](05-acquisition/README.md) for inspecting the downloaded game and building catalogs of abilities, talents, zones, items, and other content. The client is not yet downloadable at the time of planning, as reported by the project owner; acquisition has not started.
