@@ -6,7 +6,9 @@ ForeverTome records gameplay observations for the World of Warcraft: Forever ite
 
 ## Install and record
 
-Copy the `ForeverTome` directory into the selected client's `Interface/AddOns` directory, or run from this repository:
+Run **ForeverTomeSetup.exe** to install the desktop companion. Open its **Install / update addon** tab, select the detected WoW Forever folder, and click **Install / update addon** to install the latest merged addon from GitHub. You can browse to the game folder if detection misses it. The installer creates a Start menu shortcut and offers an optional desktop shortcut. See [desktop installation and usage](docs/desktop-exporter.md).
+
+For a manual installation, copy the `ForeverTome` directory into the selected client's `Interface/AddOns` directory, or run from this repository:
 
 ```powershell
 py tools/package.py --install 'D:\World of Warcraft\_classic_beta_'
@@ -51,6 +53,14 @@ This records exposed gameplay evidence, not every server action. It excludes pri
 
 Spellbooks and talents are sampled automatically on entering the world and relevant changes. To explicitly dump them, run `/ft dump`, then `/ft status`. Wait until both scans are idle and pending spell reads reach zero, then `/reload`. The scan status reports complete or partial coverage; missing information remains labeled in the export. This captures trees and spells exposed to the current character, including readable unselected talents. Collect on other classes to expand coverage; the addon does not switch your specialization or fetch a server-wide spell catalog.
 
+## Desktop exporter
+
+Open **ForeverTome Exporter** from the Start menu, or run **ForeverTomeExporter.exe** directly. Its **Install / update addon** tab finds the game and installs or updates the latest merged addon. In **Export recordings**, select your account's `SavedVariables/ForeverTome.lua` and an output folder, then click **Export now** or **Start watching**. The application maintains separate JSON files for spells, talents, items, quests, monsters, NPCs, and gathering, plus the complete catalog and dated snapshots. Use `/reload` or normal logout in WoW to save new observations first.
+
+The window shows status, provides **Stop** and **Open export folder**, and remembers your selected paths. Closing it stops watching and exits after any current conversion finishes. It does not run in the tray, start with Windows, or upload data. The packaged executable does not require Python to be installed. See [desktop exporter instructions and build steps](docs/desktop-exporter.md).
+
+For development, launch the window with `py tools/exporter_app.py`. The command-line tools below remain available for scripts and other export formats.
+
 ## Export for tooling
 
 After saving, copy the account file from the actual client path, expected to be:
@@ -78,7 +88,7 @@ py tools/build_catalog.py 'C:\Exports\ForeverTome.lua' --output 'C:\Exports\webs
 
 Use a new destination filename; add `--compact` for smaller JSON. The output preserves source evidence and item variants, with separate `transactions` and `observations` lists. It does not infer loot sources, combine overlapping acquisition channels, or supply uncaptured item stats. This is a local staging file for a future website importer; nothing is uploaded. See the [catalog format and examples](docs/website-catalog.md).
 
-To convert every new save automatically while playing:
+Use the [desktop exporter](docs/desktop-exporter.md) to control automatic conversion from a window. For a command-line watcher instead:
 
 ```powershell
 py tools/watch_catalog.py 'D:\World of Warcraft\_classic_beta_\WTF\Account\<account>\SavedVariables\ForeverTome.lua' --output-dir 'C:\Exports\ForeverTome'
