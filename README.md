@@ -1,15 +1,77 @@
 # ForeverTome
 
-ForeverTome is a planned observation addon for **World of Warcraft: Forever (WF)**. It will record what a player encounters during normal play so those observations can support a database of quests, items, creatures, professions, and guides.
+ForeverTome records gameplay observations for the World of Warcraft: Forever item, creature, and quest database. Play normally; the addon keeps an ordered history with IDs, timestamps, locations, client build, and evidence for external tools to reconstruct later.
 
-Start with the [documentation index](docs/README.md). This first contribution establishes the API research, recording principles, and client validation plan; it does not contain a runnable addon.
+**Version 0.1.0 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Offline replay and export tests are implemented; loading, permissions, event timing, performance, and native saving still need validation in game. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
 
-The [client acquisition plan](docs/05-acquisition/README.md) defines what to collect once WF becomes downloadable: abilities, talent trees, maps, items, and other catalogs, followed by gameplay evidence and repeatable build comparisons.
+## Install and record
 
-The [test harness strategy](docs/06-testing/README.md) defines how future implementation PRs will protect recording behavior: replay production code against controlled event traces, preserve immutable observations, verify save/export/migration integrity, and require regression checks. It includes 16 recording invariants and 34 planned regression scenarios; the harness is not implemented yet.
+Copy the `ForeverTome` directory into the selected client's `Interface/AddOns` directory, or run from this repository:
 
-The central rule is to preserve what the client actually reveals. A quest counter changing is an observation. Claiming that a particular creature caused that change requires additional evidence.
+```powershell
+py tools/package.py --install 'D:\World of Warcraft\_classic_beta_'
+```
 
-**Research date: September 16, 2026.** Reference client source has been inspected, but no WF client has been tested for this repository. Every capability must be read with its documented evidence status and build.
+This also builds `dist/ForeverTome-0.1.0.zip`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
 
-See [client compatibility](docs/01-foundations/client-and-evidence.md) before implementing against any example API.
+The TOC interface value `16001` is derived from version 1.60.1 and is **provisional**. Check `/dump GetBuildInfo()` in game. If its fourth result differs, package with `--interface <measured-number>`; changing the manifest does not admit a different client build. [Client evidence](docs/implementation-client.md) explains the distinction.
+
+| Command | Effect |
+| --- | --- |
+| `/ft` or `/ft status` | Show recording state, profile, observation count, and estimated storage |
+| `/ft pause`, `/ft resume` | Pause/resume with a coverage gap and fresh state baselines |
+| `/ft save`, `/ft export` | Show save/export instructions |
+| `/ft clear confirm` | Explicitly delete local history and start a new recording session |
+
+Use **`/reload` or normal logout** to save observations to disk. Recording in memory is not a disk flush; a crash can lose unsaved play. Export before clearing. The addon never automatically evicts unexported observations.
+
+## What it records
+
+| Stream | Observations |
+| --- | --- |
+| Quests | Existing-log baseline, actual acceptance, distinct repeatable runs, text, objective snapshots/changes, ready state, reward dialogue/choices, explicit turn-in, removal with unknown reason |
+| NPC interactions | Gossip text/options, offered/active quests, quest greetings, readable interacting creature identity |
+| Loot | Separate loot interactions, item/money/currency slots, slot changes/clearing, target and mouseover candidates, explicit unknown-source status |
+| Items | Observed links/variants, IDs, quantities, asynchronously loaded metadata, localized self-receipt messages without social payloads |
+| Inventory | Carried bags 0–4, aggregated item counts/changes; bag movement does not become acquisition |
+| Creatures | Target, mouseover, and nameplate sightings; readable IDs, names, level, type, classification, dead state, native entity position when available |
+| Travel/world | Player location at each observation, map/zone/subzone/instance context, periodic route samples and stationary heartbeats |
+| Vendors | NPC context, offers, prices, bundle size, stock, readable extended costs |
+| Player activity | Level/XP/money/group-size snapshots, death/alive/combat-state events, readable successful player spells and spell metadata |
+| Professions | Viewed profession state, reported newly learned recipes with readable schematics/reagents, reported crafting results |
+
+Locations identify their subject: player map coordinates are an observer location, not an exact monster spawn. Native unit positions are separately labeled. Quest deltas link before/after snapshots without claiming that a nearby creature caused progress. Loot visibility, cleared slots, inventory gains, and personal receipt remain separate facts.
+
+The current client restricts the combat-log feed, and no supported loot-source mapping contract was found in its extracted UI. Direct kill tracking and confirmed creature-to-drop attribution therefore remain unavailable. Loot target/mouseover snapshots are explicitly **candidates**. The addon does not infer drop rates, quest prerequisites, or causality from timing alone.
+
+This records exposed gameplay evidence, not every server action. It excludes private conversations, player names/GUIDs, Battle.net identifiers, arbitrary raw event payloads, and inaccessible values. Recipe capture covers the viewed profession and newly learned recipe IDs; it is not a complete catalog scan. See [coverage and schema](docs/implementation.md) for limits.
+
+## Export for tooling
+
+After saving, copy the account file from the actual client path, expected to be:
+
+```text
+D:\World of Warcraft\_classic_beta_\WTF\Account\<account>\SavedVariables\ForeverTome.lua
+```
+
+Confirm that the client creates it on the first save. Then:
+
+```powershell
+py tools/export_saved_variables.py 'C:\Exports\ForeverTome.lua' --output 'C:\Exports\session.json'
+py tools/export_saved_variables.py 'C:\Exports\ForeverTome.lua' --output 'C:\Exports\session.jsonl' --format jsonl --sqlite 'C:\Exports\evidence.sqlite'
+```
+
+The exporter uses a restricted data parser; it never executes saved Lua. JSON retains complete evidence, and JSONL supplies export/session/observation records. Optional SQLite import is transactional and idempotent: identical IDs are ignored, conflicting content is rejected. Outputs do not overwrite existing exports. No data is uploaded automatically.
+
+## Development
+
+Python 3.10+ and Lua 5.1 or compatible LuaJIT are required:
+
+```powershell
+py tools/test.py
+py tools/package.py
+```
+
+Tests load production files in TOC order through a deterministic fake game host, exercise errors/reload/export, and verify that deliberate recording defects fail the gate. Synthetic tests are not proof of native client permissions or persistence.
+
+[Implementation contract](docs/implementation.md) · [Client evidence/export](docs/implementation-client.md) · [Quest collector](docs/implementation-quests.md) · [API research handbook](docs/README.md)
