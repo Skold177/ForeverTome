@@ -12,6 +12,7 @@ Source paths below are relative to `ForeverTome/artifacts/datamining/1.60.1.6989
 - `blizzard_apidocumentationgenerated/spellbookconstantsdocumentation.lua` defines `Spell`, `FutureSpell`, `PetAction`, and `Flyout` item types and the player/pet banks.
 - `blizzard_actionbar/shared/spellflyout.lua` consumes `GetFlyoutInfo` and `GetFlyoutSlotInfo`, including base/override IDs, known status, name, and specialization.
 - `blizzard_apidocumentationgenerated/spelldocumentation.lua` and `spellshareddocumentation.lua` define readable spell information, description/subtext, passive status, power costs, current cooldowns/charges, `RequestLoadSpellData`, `SPELL_DATA_LOAD_RESULT`, and `SPELL_TEXT_UPDATE`.
+- `blizzard_apidocumentationgenerated/tooltipinfodocumentation.lua` defines `C_TooltipInfo.GetSpellByID`. The collector requests subtext and disables override substitution to retain the requested spell's identity without changing visible tooltips.
 - `blizzard_playerspells/spellbook/blizzard_spellbookframe.lua` and `blizzard_spellbookitem.lua` use specialization and pet-bar change events.
 
 No `GetSpellBaseCooldown` contract or usage was found in this source. `base_cooldown_status=unsupported_client_contract` and the associated missing-field reason explicitly record that limitation. Current cooldown duration is never used as a base cooldown.
@@ -30,11 +31,15 @@ Unknown banks omit their entries and counts and report `bank_status=unavailable`
 
 Metadata requests keep original observation references, original request time, and original observer location while retries sample at their actual completion location/time. Earlier observations are immutable. Repeated references are coalesced with a visible truncation flag. Callers use `FT.RequestSpell(spellID, observationID[, force])`; manual talent dumps use `force=true` to refresh spells absent from the current book.
 
+Version 0.2.3 also records readable spell tooltip lines, their API method, availability, and character context. Descriptions and tooltip text preserve displayed damage, healing, durations, and other effects without inventing numeric formulas. Negative cast-time sentinels are retained as `reported_cast_time_ms` with `cast_time_status=invalid_result`; zero remains a valid instant cast. The website catalog exposes valid times as `castTimeMs`, resource costs in `currentState.power_costs`, readable `tooltipLines`, and the original fields in `details` and `facts`.
+
 ## Work and storage limits
 
 Book reads and metadata reads process at most eight entries/IDs per callback. Chunk output processes eight entries per callback. A scan admits 64 skill lines, 2,048 combined player/pet entries, and 32 slots per flyout. Exceeding these limits produces partial evidence, not an assertion that the remaining entries are absent. Metadata supports 1,024 pending requests, 4,096 cached IDs, and 32 original references per request. The first rejected request emits `spell.metadata_unavailable`; diagnostic counters and `FT.SpellStatus().metadata_dropped` count additional rejected requests.
 
 Missing text retries at most three times with delayed load requests. Exhaustion emits `spell.metadata_unavailable`; later verified load/text events can enrich previously observed IDs. `/ft dump` also retries unresolved IDs encountered by its spellbook and talent scans. Missing optional APIs do not create collector exceptions or endless retries.
+
+Missing tooltips share the three-attempt metadata budget. Tooltip-only exhaustion preserves available description text and reports a separate reason. Tooltips are bounded to 64 lines and 1,024 bytes per text side, with truncation and unreadable values reported explicitly. These new tooltip reads require in-game validation after reloading 0.2.3.
 
 Ordinary zone/subzone changes retain active scans, comparisons, successful metadata, and pending requests without restarting catalogs. Leaving the world retains successful metadata and pending cast requests with their original evidence, but invalidates membership comparisons and restarts interrupted scheduled work on re-entry. Clear, pause, and error recovery cancel pending work and discard stale references.
 

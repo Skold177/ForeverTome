@@ -61,6 +61,66 @@ local function addReference(request, reference)
     end
 end
 
+local function tooltipField(line, key, kind)
+    if not FT.Value(line, "table") then
+        return nil, true
+    end
+    local ok, raw = pcall(function()
+        return line[key]
+    end)
+    if not ok or not FT.Readable(raw) then
+        return nil, true
+    end
+    if raw == nil then
+        return nil, false
+    end
+    local value = FT.Value(raw, kind)
+    if value == nil or kind == "string" and #value > 1024 then
+        return nil, true
+    end
+    return value, false
+end
+
+local function readTooltip(data, missing, spellID)
+    data.tooltip_method  = "C_TooltipInfo.GetSpellByID"
+    data.tooltip_context = "character_at_observation"
+    if not FT.Profile.spell_tooltips or not FT.Resolve(data.tooltip_method) then
+        data.tooltip_status           = "unsupported"
+        missing["data.tooltip_lines"] = "unsupported"
+        return false
+    end
+    local raw   = FT.Call(data.tooltip_method, spellID, nil, true, true)
+    local lines = FT.Field(raw, "lines", "table")
+    local count = FT.Length(lines)
+    if not count then
+        data.tooltip_status           = "unavailable"
+        missing["data.tooltip_lines"] = "not_ready_or_restricted"
+        return true
+    end
+    data.tooltip_lines = {}
+    local reason       = count > 64 and "capacity_limit" or nil
+    for index = 1, math.min(count, 64) do
+        local rawLine         = FT.Field(lines, index, "table")
+        local left, badLeft   = tooltipField(rawLine, "leftText", "string")
+        local right, badRight = tooltipField(rawLine, "rightText", "string")
+        local kind, badKind   = tooltipField(rawLine, "type", "number")
+        local lineType        = integer(kind, 0, 255)
+        if badLeft or badRight or badKind or kind ~= nil and lineType == nil then
+            reason = reason or "invalid_or_unreadable"
+        end
+        if left ~= nil or right ~= nil or lineType ~= nil then
+            data.tooltip_lines[#data.tooltip_lines + 1] = {
+                index = index, left_text = left, right_text = right, type = lineType,
+            }
+        else
+            reason = reason or "invalid_or_unreadable"
+        end
+    end
+    data.tooltip_status           = reason and "partial" or "available"
+    missing["data.tooltip_lines"] = reason
+    return false
+end
+
 local function readMetadata(spellID)
     local missing = {}
     local source  = FT.Call("C_Spell.GetSpellInfo", spellID)
@@ -68,6 +128,13 @@ local function readMetadata(spellID)
         name = "string", iconID = "number", originalIconID = "number", castTime = "number",
         minRange = "number", maxRange = "number",
     }, missing, "data.")
+    data.cast_time_status = data.castTime ~= nil and "available" or "unavailable"
+    if data.castTime and data.castTime < 0 then
+        data.reported_cast_time_ms = data.castTime
+        data.castTime              = nil
+        data.cast_time_status      = "invalid_result"
+        missing["data.castTime"]  = "invalid_result"
+    end
     data.spell_id              = spellID
     data.resolved_spell_id     = contentID(FT.Field(source, "spellID", "number"))
     data.description           = FT.Value(FT.Call("C_Spell.GetSpellDescription", spellID), "string")
@@ -124,11 +191,12 @@ local function readMetadata(spellID)
         missing["data.current_state.charges"] = FT.Resolve("C_Spell.GetSpellCharges")
             and "not_charge_based_or_not_ready" or "unsupported"
     end
-    local retry = (not data.name and FT.Resolve("C_Spell.GetSpellInfo"))
+    local tooltipRetry = readTooltip(data, missing, spellID)
+    local textRetry    = (not data.name and FT.Resolve("C_Spell.GetSpellInfo"))
         or ((not data.description or data.description == "") and FT.Resolve("C_Spell.GetSpellDescription"))
-    data.text_status  = retry and "pending" or (data.name and data.description and "available" or "unavailable")
+    data.text_status  = textRetry and "pending" or (data.name and data.description and "available" or "unavailable")
     data.completeness = next(missing) and "partial" or "complete"
-    return data, missing, retry and true or false
+    return data, missing, (textRetry or tooltipRetry) and true or false
 end
 
 local function enqueue(spellID, reference, force)
@@ -201,7 +269,7 @@ metadataWork = function()
         local data, missing, retry = readMetadata(request.spell_id)
         request.attempts = request.attempts + 1
         local exhausted = request.attempts >= 3
-        if retry and exhausted then
+        if exhausted and data.text_status == "pending" then
             data.text_status = "unresolved"
         end
         if not request.last or not FT.Equal(request.last, { data = data, missing = missing }) then
@@ -221,11 +289,20 @@ metadataWork = function()
         end
         if not retry or exhausted then
             if retry then
+                local unresolved = {}
+                local reason     = "tooltip_not_ready_after_retries"
+                if data.text_status == "unresolved" then
+                    unresolved["data.description"] = "not_ready"
+                    reason                         = "text_not_ready_after_retries"
+                end
+                if data.tooltip_status == "unavailable" then
+                    unresolved["data.tooltip_lines"] = "not_ready"
+                end
                 FT.Emit("spell.metadata_unavailable", {
-                    spell_id = request.spell_id, attempts = request.attempts, reason = "text_not_ready_after_retries",
+                    spell_id = request.spell_id, attempts = request.attempts, reason = reason,
                     requested_at_s = request.requested_at_s, origin_location = request.origin_location,
                 }, { method = "metadata_retry_exhausted" }, "api_snapshot", request.references,
-                    { ["data.description"] = "not_ready" })
+                    unresolved)
             end
             if request.generation ~= generation then
                 return

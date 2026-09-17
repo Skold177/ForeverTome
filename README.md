@@ -2,7 +2,7 @@
 
 ForeverTome records gameplay observations for the World of Warcraft: Forever item, creature, quest, spell, and talent database. Play normally; the addon keeps an ordered history with IDs, timestamps, locations, client build, and evidence for external tools to reconstruct later.
 
-**Version 0.2.2 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Live saved data confirms quest acceptance links, objective progress, turn-in, loot capture, and persistence in this build. The latest delayed-turn-in links and native quest-item receipt capture have offline regression coverage and still need an in-game retest. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
+**Version 0.2.3 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Live saved data confirms quest acceptance links, objective progress, turn-in dialogue links, native quest-item receipts, loot capture, and persistence in this build. Item stats and tooltip capture have offline regression coverage and still need an in-game test. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
 
 ## Install and record
 
@@ -12,9 +12,9 @@ Copy the `ForeverTome` directory into the selected client's `Interface/AddOns` d
 py tools/package.py --install 'D:\World of Warcraft\_classic_beta_'
 ```
 
-This also builds `dist/ForeverTome-0.2.2.zip`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
+This also builds `dist/ForeverTome-0.2.3.zip`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
 
-The TOC interface value `16001` is derived from version 1.60.1 and is **provisional**. Check `/dump GetBuildInfo()` in game. If its fourth result differs, package with `--interface <measured-number>`; changing the manifest does not admit a different client build. [Client evidence](docs/implementation-client.md) explains the distinction.
+The TOC interface value `16001` matches the live client's recorded `GetBuildInfo()` result. For a different measured interface, package with `--interface <measured-number>`; changing the manifest does not admit a different client build. [Client evidence](docs/implementation-client.md) explains the distinction.
 
 | Command | Effect |
 | --- | --- |
@@ -33,7 +33,7 @@ Use **`/reload` or normal logout** to save observations to disk. Recording in me
 | Quests | Existing-log baseline, actual acceptance, distinct repeatable runs, text, objective snapshots/changes, ready state, reward dialogue/choices, explicit turn-in, native quest-item receipts, removal with unknown reason |
 | NPC interactions | Gossip text/options, offered/active quests, quest greetings, readable interacting creature identity |
 | Loot | Separate loot interactions, item/money/currency slots, slot changes/clearing, target and mouseover candidates, explicit unknown-source status |
-| Items | Observed links/variants, IDs, quantities, asynchronously loaded metadata, localized self-receipt messages without social payloads |
+| Items | Observed links/variants, IDs, quantities, icon references, basic metadata, available stat tokens/values and readable tooltip lines, localized self-receipt messages without social payloads |
 | Inventory | Carried bags 0–4, aggregated item counts/changes; bag movement does not become acquisition |
 | Creatures | Target, mouseover, and nameplate sightings; readable IDs, names, level, type, classification, dead state, native entity position when available |
 | Travel/world | Player location at each observation, map/zone/subzone/instance context, periodic route samples and stationary heartbeats |
@@ -67,6 +67,26 @@ py tools/export_saved_variables.py 'C:\Exports\ForeverTome.lua' --output 'C:\Exp
 ```
 
 The exporter uses a restricted data parser; it never executes saved Lua. JSON retains complete evidence, and JSONL supplies export/session/observation records. Optional SQLite import is transactional and idempotent: identical IDs are ignored, conflicting content is rejected. Outputs do not overwrite existing exports. No data is uploaded automatically.
+
+## Export a website catalog
+
+To organize saved observations into item, quest, NPC, spell, talent, and other catalogs with linked event records:
+
+```powershell
+py tools/build_catalog.py 'C:\Exports\ForeverTome.lua' --output 'C:\Exports\website-catalog.json'
+```
+
+Use a new destination filename; add `--compact` for smaller JSON. The output preserves source evidence and item variants, with separate `transactions` and `observations` lists. It does not infer loot sources, combine overlapping acquisition channels, or supply uncaptured item stats. This is a local staging file for a future website importer; nothing is uploaded. See the [catalog format and examples](docs/website-catalog.md).
+
+To convert every new save automatically while playing:
+
+```powershell
+py tools/watch_catalog.py 'D:\World of Warcraft\_classic_beta_\WTF\Account\<account>\SavedVariables\ForeverTome.lua' --output-dir 'C:\Exports\ForeverTome'
+```
+
+The watcher checks every two seconds and maintains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`, plus the full `latest.json` and dated snapshots. Each category retains detailed captured fields and supporting records. Shared export IDs identify files from the same save. Gathering records supported successful harvesting, mining, and skinning casts with the player's observed location; resource identities and exact node positions remain unknown.
+
+It waits for WoW to save through `/reload` or logout, retries incomplete saves, and stops with Ctrl+C. Individual files are replaced atomically; consumers reading several files should require matching export IDs. Nothing is installed to run at Windows startup.
 
 ## Development
 

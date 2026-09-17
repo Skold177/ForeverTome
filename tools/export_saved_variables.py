@@ -35,7 +35,7 @@ ARRAY_FIELDS = frozenset({
     "currencies", "reward_items", "choice_items", "source_pairs", "spells",
     "reagent_slots", "links", "collectors", "skill_lines", "entries", "flyout_slots",
     "added_spell_ids", "removed_spell_ids", "power_costs", "treeIDs", "nodeIDs", "entryIDs",
-    "entryIDsWithCommittedRanks", "visibleEdges", "groupIDs", "conditionIDs", "gates",
+    "entryIDsWithCommittedRanks", "visibleEdges", "groupIDs", "conditionIDs", "gates", "tooltip_lines",
     "subTreeSelectionNodeIDs", "tree_hash", "tree_ids", "nodes", "entry_rank_increases", "committed_entry_ids",
 })
 SUPPORTED_KINDS = frozenset({

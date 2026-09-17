@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ForeverTome website catalog v1",
+  "type": "object",
+  "required": [
+    "format",
+    "schemaVersion",
+    "exportId",
+    "source",
+    "contexts",
+    "sessions",
+    "catalog",
+    "transactions",
+    "observations",
+    "summary",
+    "semantics",
+    "generatorVersion"
+  ],
+  "properties": {
+    "format": {
+      "const": "forevertome.website-catalog"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "exportId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "sha256",
+        "schemaVersion",
+        "synthetic",
+        "observationCount"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "synthetic": {
+          "type": "boolean"
+        },
+        "observationCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "contexts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "product",
+          "client"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "client": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "contextId",
+          "data",
+          "diagnostics"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "contextId": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "diagnostics": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "required": [
+        "items",
+        "quests",
+        "npcs",
+        "spells",
+        "talents",
+        "recipes",
+        "maps",
+        "professions",
+        "currencies"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "quests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "npcs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "spells": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "talents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "recipes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "maps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "professions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        },
+        "currencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "transactions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "observationCount",
+        "transactionCount",
+        "kindCounts",
+        "transactionCounts",
+        "catalogCounts",
+        "receiptChannels"
+      ],
+      "properties": {
+        "observationCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "transactionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kindCounts": {
+          "$ref": "#/$defs/counts"
+        },
+        "transactionCounts": {
+          "$ref": "#/$defs/counts"
+        },
+        "catalogCounts": {
+          "$ref": "#/$defs/counts"
+        },
+        "receiptChannels": {
+          "$ref": "#/$defs/counts"
+        }
+      },
+      "additionalProperties": false
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "generatorVersion": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "entity": {
+      "type": "object",
+      "required": [
+        "key",
+        "contextId",
+        "kind",
+        "nativeId",
+        "display",
+        "sourceIds",
+        "facts",
+        "details"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "nativeId": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "display": {
+          "type": "object"
+        },
+        "displaySourceId": {
+          "type": "string"
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fact"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "link",
+              "sourceIds"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "link": {
+                "type": "string"
+              },
+              "sourceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fact": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "path",
+        "data",
+        "sourceIds"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "data": {},
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "record": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "sessionId",
+        "contextId",
+        "sequence",
+        "elapsedSeconds",
+        "data",
+        "capture",
+        "evidence",
+        "missingFields",
+        "relatedIds",
+        "entities"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "elapsedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "observedAtUnix": {
+          "type": "number",
+          "minimum": 0
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "location": {
+          "type": "object"
+        },
+        "data": {
+          "type": "object"
+        },
+        "capture": {
+          "type": "object"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "missingFields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "relatedIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "role",
+              "path"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "channel": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
