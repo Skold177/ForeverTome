@@ -2,7 +2,7 @@
 ## Title: ForeverTome
 ## Notes: Records gameplay evidence for the ForeverTome database.
 ## Author: ForeverTome
-## Version: 0.2.1
+## Version: 0.2.2
 ## SavedVariables: ForeverTomeDB
 
 Core.lua

@@ -16,7 +16,7 @@ FT.Profile = {
     id = known and "forever-beta-69893-source-v1" or "unknown-client-v1",
     product = known and "WF" or "UNKNOWN", supported = known,
     quest_mode = known and "modern" or nil,
-    quest_accepted_arg = 1, quest_turned_in = known, quest_removed = known,
+    quest_accepted_arg = 1, quest_turned_in = known, quest_removed = known, quest_loot_received = known,
     quest_dialogue = known, quest_rewards = known, quest_gossip = known, quest_data_load = known,
     loot_info = known and "modern" or nil, container_info = known and "modern" or nil,
     item_info = known and "modern" or nil, loot_source_pairs = false,

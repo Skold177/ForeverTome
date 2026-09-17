@@ -20,7 +20,9 @@ An objective delta requires complete snapshots from the same run with matching r
 
 `quest.dialogue` immediately captures readable offer, progress or reward text, NPC context, and offered rewards, choices or required items. The interacting NPC is sampled through `npc`; missing NPC identity stays unknown. Reward choices do not identify the chosen reward or prove receipt. The item collector receives linked metadata requests for observed items.
 
-Acceptance and turn-in link the latest matching offer or reward dialogue through `related_observation_ids` and its `interaction_id`. One retained dialogue survives closure for up to two seconds, is consumed by the next valid acceptance/turn-in, and is replaced by new dialogue, gossip, or greeting activity. Quest ID and dialogue phase must match; a conflicting live NPC blocks the link. Reset boundaries clear it. Reading an open dialogue for longer than two seconds does not expire the context.
+Acceptance links the latest matching offer through `related_observation_ids` and its `interaction_id`, labeled `dialogue_context = recent_dialogue`. One active dialogue survives closure for up to two seconds, is consumed by the next valid acceptance or a matching quest turn-in, and is replaced by new dialogue, gossip, or greeting activity. Unrelated turn-ins preserve a pending offer. Quest ID and dialogue phase must match; a conflicting live NPC blocks the link. Reset boundaries clear it. Reading an open dialogue for longer than two seconds does not expire the context.
+
+Each active quest run also retains its latest successful `QUEST_COMPLETE` snapshot. A turn-in can link that reward dialogue after a long closed-panel interval or unrelated interactions, labeled `dialogue_context = quest_run_reward_dialogue`. The cache belongs to the exact quest run; a replacement acceptance or reset discards it. Removal-before-turn-in ordering retains it with the closed run for 30 seconds. A conflicting live NPC still prevents carrying that dialogue context into the turn-in. This fixes the observed 43-second reward-dialogue-to-turn-in case without extending the acceptance closure window.
 
 The event's `npc` remains a contemporaneous sample. If it is unavailable, `dialogue_npc` can retain the linked dialogue's historical NPC snapshot, while `missing_fields.npc = unknown_source` remains explicit. This is observed offer/reward context, not proof of the acceptance source: canceling an offer and accepting a shared, item-started, or automatic quest can be indistinguishable within the short closure window. Consumers must preserve that distinction rather than promote `dialogue_npc` to a confirmed questgiver.
 
@@ -28,9 +30,17 @@ The event's `npc` remains a contemporaneous sample. If it is unavailable, `dialo
 
 Missing titles/objectives can request quest metadata. `quest.metadata` appends a linked title observation; it never edits an earlier record. `quest.metadata_unavailable` records a timeout. Unrelated and already-resolved callbacks are ignored.
 
+## Received reward items
+
+`QUEST_LOOT_RECEIVED(questID, itemLink, quantity)` directly emits `quest.reward_received`, with the event's quest ID, item ID/link, quantity, local recipient, and `source_status = quest_event`. Its evidence method is `direct_event`. This remains separate from reward options displayed in dialogue and from generic `CHAT_MSG_LOOT` receipts. No time-based matching or reward-choice click is treated as proof of receipt.
+
+When available, the record includes the observed run ID and links to its turn-in and reward dialogue. Closed-run context lasts 30 seconds; the observed 11-second item delivery delay fits within that window. Reaccepting the same quest within a prior turn-in's context window leaves the reward run unknown to avoid attaching a delayed receipt to the new run. Expired, missing, or reset context does not discard the native receipt: its explicit quest ID remains valid and `missing_fields.quest_run_id = not_observed` labels the unavailable run.
+
+Native reward receipts, chat receipts, and inventory changes can describe the same items. Consumers must not sum these observation streams as independent acquisitions. Prior saved chat receipts are not retroactively assigned to quests. The source confirms the native event contract; delivery for ordinary Forever quests still needs an in-game retest.
+
 ## Bounds and failure behavior
 
-The transient cache permits 256 quests, enumeration permits 512 log rows, and each quest permits 64 objective rows. Dialogue reward categories permit 64 entries and gossip/greeting arrays permit 256 entries. Truncated or unreadable snapshots retain missing-field reasons and cannot form complete progress baselines.
+The transient cache permits 256 quests, with at most one reward-dialogue context per run; enumeration permits 512 log rows, and each quest permits 64 objective rows. Dialogue reward categories permit 64 entries and gossip/greeting arrays permit 256 entries. Truncated or unreadable snapshots retain missing-field reasons and cannot form complete progress baselines.
 
 At most 32 quest metadata requests are pending, each with eight reference IDs and two request attempts separated by ten seconds. A timeout ends that request. Cache saturation emits a bounded quest coverage-gap observation. The shared store additionally enforces record, byte, string, scheduled-task and diagnostic limits.
 

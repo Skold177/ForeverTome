@@ -50,7 +50,266 @@ end
 local firstLink  = "|cff1eff00|Hitem:101:0:0:0:0:0:11:0|h[Test Hood]|h|r"
 local secondLink = "|cff1eff00|Hitem:101:0:0:0:0:0:12:0|h[Test Hood]|h|r"
 
+local function rewardDialogue(host, questID)
+    host.env.GetQuestID = function()
+        return questID
+    end
+    host.env.GetTitleText = function()
+        return "A Rewarding Quest"
+    end
+    host.env.GetRewardText = function()
+        return "Thank you."
+    end
+    host.env.GetNumQuestRewards = function()
+        return 1
+    end
+    host.env.GetNumQuestChoices = function()
+        return 1
+    end
+    host.env.GetQuestItemInfo = function(kind)
+        return "Test Hood", 134400, 1, 2, true, kind == "reward" and 101 or 102, 0
+    end
+    host.env.GetQuestItemLink = function(kind)
+        return kind == "reward" and firstLink or "item:102"
+    end
+    host:event("QUEST_COMPLETE")
+    return host:last("quest.dialogue")
+end
+
 return {
+    {
+        name = "quest reward events before turnin retain closed reward dialogue without inventing turnin",
+        run = function(Host)
+            local host     = configured(Host)
+            host:event("QUEST_ACCEPTED", 501)
+            local accepted = host:last("quest.accepted")
+            local dialogue = rewardDialogue(host, 501)
+            host:event("QUEST_FINISHED")
+            host:advance(3)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 2)
+            local reward = host:last("quest.reward_received")
+            host:assertTrue(reward ~= nil)
+            host:assertEqual(reward.data.quest_id, 501)
+            host:assertEqual(reward.data.quest_run_id, accepted.data.quest_run_id)
+            host:assertEqual(reward.data.item_id, 101)
+            host:assertEqual(reward.data.link, firstLink)
+            host:assertEqual(reward.data.quantity, 2)
+            host:assertEqual(reward.data.recipient, "local_player")
+            host:assertEqual(reward.data.source_status, "quest_event")
+            host:assertEqual(reward.capture.event, "QUEST_LOOT_RECEIVED")
+            host:assertEqual(reward.evidence.method, "direct_event")
+            host:assertEqual(reward.related_observation_ids, { dialogue.observation_id })
+            host:assertEqual(#host:records("quest.turned_in"), 0)
+            host:assertEqual(#host:records("item.received"), 0)
+            host:event("QUEST_TURNED_IN", 501, 100, 50)
+            host:assertEqual(host:records("quest.reward_received")[1], reward)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quest reward events delayed eleven seconds link turnin dialogue and item metadata",
+        run = function(Host)
+            local host, state = configured(Host)
+            host:event("QUEST_ACCEPTED", 501)
+            local dialogue = rewardDialogue(host, 501)
+            host:event("QUEST_FINISHED")
+            host:advance(3)
+            host:event("QUEST_TURNED_IN", 501, 100, 50)
+            local turnin = host:last("quest.turned_in")
+            host:event("QUEST_REMOVED", 501)
+            host:advance(11)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local reward = host:last("quest.reward_received")
+            host:assertTrue(reward ~= nil)
+            host:assertEqual(reward.data.quest_run_id, turnin.data.quest_run_id)
+            host:assertEqual(reward.related_observation_ids, { turnin.observation_id, dialogue.observation_id })
+            host:advance(0.5)
+            state.metadata[firstLink] = { name = "Quest reward metadata", link = firstLink }
+            host:event("ITEM_DATA_LOAD_RESULT", 101, true)
+            local found = false
+            for _, reference in ipairs(host:last("item.metadata").related_observation_ids) do
+                found = found or reference == reward.observation_id
+            end
+            host:assertTrue(found)
+            host:assertEqual(host:records("quest.reward_received")[1], reward)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quest reward events remain direct evidence when run context is absent or expired",
+        run = function(Host)
+            for _, expired in ipairs({ false, true }) do
+                local host = configured(Host)
+                if expired then
+                    host:event("QUEST_ACCEPTED", 501)
+                    rewardDialogue(host, 501)
+                    host:event("QUEST_TURNED_IN", 501, 100, 50)
+                    host:advance(31)
+                end
+                host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+                local reward = host:last("quest.reward_received")
+                host:assertTrue(reward ~= nil)
+                host:assertEqual(reward.data.quest_id, 501)
+                host:assertEqual(reward.data.item_id, 101)
+                host:assertEqual(reward.data.quest_run_id, nil)
+                host:assertEqual(reward.missing_fields.quest_run_id, "not_observed")
+                host:assertEqual(reward.related_observation_ids, {})
+                local restored = Host.new(host.FT.Export())
+                restored:start()
+                restored:assertTrue(restored.FT.Status().initialized and not restored.FT.Status().blocked)
+                restored:assertEqual(restored:last("quest.reward_received"), reward)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "quest reward events never attach another quest context",
+        run = function(Host)
+            local host = configured(Host)
+            host:event("QUEST_ACCEPTED", 501)
+            rewardDialogue(host, 501)
+            host:event("QUEST_TURNED_IN", 501, 100, 50)
+            host:event("QUEST_LOOT_RECEIVED", 502, firstLink, 1)
+            local reward = host:last("quest.reward_received")
+            host:assertTrue(reward ~= nil)
+            host:assertEqual(reward.data.quest_id, 502)
+            host:assertEqual(reward.data.quest_run_id, nil)
+            host:assertEqual(reward.related_observation_ids, {})
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "delayed quest rewards cannot attach to a new repeatable run",
+        run = function(Host)
+            local host = configured(Host)
+            host:event("QUEST_ACCEPTED", 501)
+            rewardDialogue(host, 501)
+            host:event("QUEST_TURNED_IN", 501, 100, 50)
+            host:event("QUEST_ACCEPTED", 501)
+            rewardDialogue(host, 501)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local reward = host:last("quest.reward_received")
+            host:assertTrue(reward ~= nil)
+            host:assertEqual(reward.data.quest_id, 501)
+            host:assertEqual(reward.data.quest_run_id, nil)
+            host:assertEqual(reward.missing_fields.quest_run_id, "not_observed")
+            host:assertEqual(reward.related_observation_ids, {})
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quest reward events accept native named quality color links and preserve item fields",
+        run = function(Host)
+            local host, state = configured(Host)
+            local links       = {
+                "|cnIQ1:|Hitem:247846::::::::4:1485::11:::::::|h[Synthetic Reward Book]|h|r",
+                "|cnIQ1:|Hitem:11584::::::::4:1485:::::::::|h[Synthetic Reward Food]|h|r",
+            }
+            local itemIDs = { 247846, 11584 }
+            for index, link in ipairs(links) do
+                host:event("QUEST_LOOT_RECEIVED", 501, link, index)
+                local reward = host:last("quest.reward_received")
+                host:assertTrue(reward ~= nil)
+                host:assertEqual(reward.data.item_id, itemIDs[index])
+                host:assertEqual(reward.data.link, link)
+                host:assertEqual(reward.data.quantity, index)
+                host:assertEqual(state.requested[index], itemIDs[index])
+                state.metadata[link] = { name = "Synthetic Reward", link = link }
+                host:event("ITEM_DATA_LOAD_RESULT", itemIDs[index], true)
+                local metadata = host:last("item.metadata")
+                host:assertEqual(metadata.data.requested_link, link)
+                host:assertEqual(metadata.related_observation_ids, { reward.observation_id })
+            end
+            host:assertEqual(#host:records("quest.reward_received"), 2)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quest reward events reject malformed and secret arguments before requesting metadata",
+        run = function(Host)
+            local host, state = configured(Host)
+            local invalid     = { 0, -1, 1.5, math.huge, 0 / 0, "501", { secret = true }, false }
+            for _, value in ipairs(invalid) do
+                host:event("QUEST_LOOT_RECEIVED", value, firstLink, 1)
+                host:event("QUEST_LOOT_RECEIVED", 501, firstLink, value)
+            end
+            host:event("QUEST_LOOT_RECEIVED", nil, firstLink, 1)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, nil)
+            host:event("QUEST_LOOT_RECEIVED", 2147483648, firstLink, 1)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1000000001)
+            for _, link in ipairs({ false, 101, { secret = true }, "", "spell:101", "item:0", "item:-1",
+                "item:2147483648", "item:101bad", "prefix item:101", "item:101:1-2", "|Hitem:101x|h[Bad]|h",
+                "|cn:|Hitem:101|h[Bad]|h|r", "|cnIQ1|Hitem:101|h[Bad]|h|r",
+                "prefix|cnIQ1:|Hitem:101|h[Bad]|h|r", "|cnIQ1:|Hitem:101bad|h[Bad]|h|r" }) do
+                host:event("QUEST_LOOT_RECEIVED", 501, link, 1)
+            end
+            host:event("QUEST_LOOT_RECEIVED", 501, nil, 1)
+            host:assertEqual(#host:records("quest.reward_received"), 0)
+            host:assertEqual(#state.requested, 0)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quest reward capture requires a verified event profile",
+        run = function(Host)
+            local host = Host.new(nil, "1.60.2", "unknown")
+            host:start()
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            host.FT.Dispatch("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            host:assertEqual(#host:records("quest.reward_received"), 0)
+            host:assertHealthy()
+            host = configured(Host)
+            host.FT.Profile.quest_loot_received = false
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            host:assertEqual(#host:records("quest.reward_received"), 0)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "reset drops quest reward context while retaining subsequent direct receipt evidence",
+        run = function(Host)
+            local host = configured(Host)
+            host:event("QUEST_ACCEPTED", 501)
+            rewardDialogue(host, 501)
+            host:event("QUEST_TURNED_IN", 501, 100, 50)
+            host.FT.ResetCollectors("test_gap")
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local reward = host:last("quest.reward_received")
+            host:assertTrue(reward ~= nil)
+            host:assertEqual(reward.data.quest_id, 501)
+            host:assertEqual(reward.data.quest_run_id, nil)
+            host:assertEqual(reward.related_observation_ids, {})
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "distinct quest reward events remain separate and nearby loot chat keeps unknown source",
+        run = function(Host)
+            local host, state = configured(Host)
+            host:event("QUEST_ACCEPTED", 501)
+            rewardDialogue(host, 501)
+            host:event("QUEST_TURNED_IN", 501, 100, 50)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local rewards = host:records("quest.reward_received")
+            host:assertEqual(#rewards, 2)
+            host:assertTrue(rewards[1].observation_id ~= rewards[2].observation_id)
+            host:assertEqual(rewards[2].data.selected_choice, nil)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            local receipt = host:last("item.received")
+            host:assertEqual(receipt.data.source_status, "unknown")
+            host:assertEqual(receipt.data.quest_id, nil)
+            host:assertEqual(receipt.related_observation_ids, {})
+            state.metadata[firstLink] = { name = "Shared item metadata", link = firstLink }
+            host:event("ITEM_DATA_LOAD_RESULT", 101, true)
+            local references = {}
+            for _, reference in ipairs(host:last("item.metadata").related_observation_ids) do
+                references[reference] = true
+            end
+            host:assertTrue(references[rewards[1].observation_id] and references[rewards[2].observation_id])
+            host:assertHealthy()
+        end,
+    },
     {
         name = "loot target and mouseover observations remain candidates without source attribution",
         run = function(Host)

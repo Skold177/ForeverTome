@@ -389,6 +389,20 @@ h:event("QUEST_DETAIL")
 h:event("QUEST_FINISHED")
 e.UnitGUID = nil
 h:event("QUEST_ACCEPTED", 501)
+e.UnitGUID = function(token)
+    if token == "npc" then
+        return "Creature-0-1-2-3-7001-000001"
+    end
+end
+h:event("QUEST_COMPLETE")
+h:event("QUEST_FINISHED")
+e.UnitGUID = nil
+h:advance(43)
+h:event("QUEST_REMOVED", 501, false)
+h:event("QUEST_TURNED_IN", 501, 380, 50)
+h:advance(11)
+h:event("QUEST_LOOT_RECEIVED", 501, "item:11584", 10)
+h:event("QUEST_LOOT_RECEIVED", 501, "item:247846", 1)
 h:assertHealthy()
 h.FT.Emit("item.metadata", { item_id = 123, name = "Caf\195\169", description = "First\nSecond" }, "ITEM_DATA_LOAD_RESULT")
 h:event("PLAYER_LOGOUT")
@@ -432,6 +446,19 @@ io.write("ForeverTomeDB = " .. serialize(database))
         self.assertEqual(accepted["missing_fields"]["npc"], "unknown_source")
         self.assertEqual(accepted["related_observation_ids"], [dialogue["observation_id"]])
         self.assertEqual(accepted["data"]["interaction_id"], dialogue["data"]["interaction_id"])
+        reward_dialogue = next(row for row in observations if row["kind"] == "quest.dialogue" and row["data"]["phase"] == "QUEST_COMPLETE")
+        turnin          = next(row for row in observations if row["kind"] == "quest.turned_in")
+        receipts        = [row for row in observations if row["kind"] == "quest.reward_received"]
+        self.assertEqual(turnin["data"]["dialogue_npc"]["creature_id"], 7001)
+        self.assertEqual(turnin["data"]["dialogue_context"], "quest_run_reward_dialogue")
+        self.assertIn(reward_dialogue["observation_id"], turnin["related_observation_ids"])
+        self.assertEqual([(row["data"]["item_id"], row["data"]["quantity"]) for row in receipts], [(11584, 10), (247846, 1)])
+        for receipt in receipts:
+            self.assertEqual(receipt["capture"]["event"], "QUEST_LOOT_RECEIVED")
+            self.assertEqual(receipt["evidence"]["method"], "direct_event")
+            self.assertEqual(receipt["data"]["quest_id"], 501)
+            self.assertEqual(receipt["data"]["quest_run_id"], turnin["data"]["quest_run_id"])
+            self.assertEqual(receipt["related_observation_ids"], [turnin["observation_id"], reward_dialogue["observation_id"]])
         metadata     = [row["data"] for row in observations if row["kind"] == "talent.metadata"]
         nodes        = {row["entity_id"]: row["info"] for row in metadata if row["entity_type"] == "node"}
         self.assertEqual(set(nodes), {11, 12})

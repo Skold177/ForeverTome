@@ -121,10 +121,17 @@ local function NewRun(questID, reason, event)
     if not runs[questID] then
         runCount = runCount + 1
     end
-    local run = {
+    local previousRun = runs[questID]
+    local previousEnd = closed[questID]
+    local run         = {
         id = FT.NewContext("quest"), questID = questID, start_reason = reason,
         revision = 0, metadata = {},
     }
+    local prior = previousRun or (previousEnd and previousEnd.run)
+    run.reward_ambiguous_until = prior and prior.reward_ambiguous_until
+    if previousEnd and previousEnd.turnin then
+        run.reward_ambiguous_until = math.max(run.reward_ambiguous_until or 0, previousEnd.turnin_at + 30)
+    end
     runs[questID]   = run
     closed[questID] = nil
     if reason == "baseline" then
@@ -454,15 +461,22 @@ local function CloseInteraction()
     end
 end
 
-local function EventContext(questID, phase)
+local function EventContext(questID, phase, run)
     local recent    = dialogue
     local npc       = FT.Unit("npc")
     local contextID = npc and interaction
+    local method    = "recent_dialogue"
     local reference
     local dialogueNPC
-    dialogue = nil
+    if phase == "QUEST_DETAIL" or (dialogue and dialogue.quest_id == questID) then
+        dialogue = nil
+    end
+    if phase == "QUEST_COMPLETE" and run and run.reward_dialogue then
+        recent = run.reward_dialogue
+        method = "quest_run_reward_dialogue"
+    end
     if recent and recent.quest_id == questID and recent.phase == phase
-        and (not recent.closed_at or FT.Now() - recent.closed_at <= DIALOGUE_GRACE)
+        and (method == "quest_run_reward_dialogue" or not recent.closed_at or FT.Now() - recent.closed_at <= DIALOGUE_GRACE)
         and (not npc or not recent.npc or npc.guid == recent.npc.guid) then
         contextID = recent.interaction_id
         reference = recent.observation_id
@@ -470,7 +484,7 @@ local function EventContext(questID, phase)
             dialogueNPC = recent.npc
         end
     end
-    return npc, contextID, reference, dialogueNPC
+    return npc, contextID, reference, dialogueNPC, reference and method
 end
 
 local function Dialogue(event, questStartItemID)
@@ -518,6 +532,9 @@ local function Dialogue(event, questStartItemID)
             quest_id = questID, phase = event, npc = data.npc,
             interaction_id = interaction, observation_id = observationID,
         }
+        if event == "QUEST_COMPLETE" and runs[questID] then
+            runs[questID].reward_dialogue = dialogue
+        end
     end
     EnrichItems(data.rewards, observationID)
     EnrichItems(data.choices, observationID)
@@ -633,10 +650,24 @@ end
 
 local function ClosedRun(questID)
     local entry = closed[questID]
-    if entry and FT.Now() - entry.elapsed <= 30 then
+    if entry and FT.Now() - (entry.turnin_at or entry.elapsed) <= 30 then
         return entry
     end
     closed[questID] = nil
+end
+
+function FT.QuestRewardContext(rawQuestID)
+    local questID = ContentID(rawQuestID)
+    if not Enabled() or not questID then
+        return
+    end
+    local recent = ClosedRun(questID)
+    local run    = runs[questID] or (recent and recent.run)
+    if not run or (run.reward_ambiguous_until and FT.Now() <= run.reward_ambiguous_until) then
+        return
+    end
+    local reward = run.reward_dialogue
+    return run.id, recent and recent.turnin, reward and reward.observation_id
 end
 
 local function CloseRun(questID, run)
@@ -648,7 +679,7 @@ local function CloseRun(questID, run)
     local count = 0
     for id, entry in pairs(closed) do
         count = count + 1
-        if FT.Now() - entry.elapsed > 30 or count > MAX_QUESTS then
+        if FT.Now() - (entry.turnin_at or entry.elapsed) > 30 or count > MAX_QUESTS then
             closed[id] = nil
         end
     end
@@ -671,10 +702,10 @@ FT.On("QUEST_ACCEPTED", function(event, first, second)
     end
     local run = NewRun(questID, "accepted", event)
     if run then
-        local npc, contextID, reference, dialogueNPC = EventContext(questID, "QUEST_DETAIL")
+        local npc, contextID, reference, dialogueNPC, method = EventContext(questID, "QUEST_DETAIL")
         run.origin = FT.Emit("quest.accepted", {
             quest_id = questID, quest_run_id = run.id, interaction_id = contextID,
-            npc = npc, dialogue_npc = dialogueNPC,
+            npc = npc, dialogue_npc = dialogueNPC, dialogue_context = method,
         }, event, "direct_event", Related(reference), not npc and { npc = "unknown_source" } or nil)
         ScheduleScan(event)
     end
@@ -688,10 +719,10 @@ FT.On("QUEST_TURNED_IN", function(event, rawQuestID, xpReward, moneyReward)
     if not questID then
         return
     end
-    local recent                                 = ClosedRun(questID)
-    local run                                    = runs[questID] or (recent and recent.run)
-    local npc, contextID, reference, dialogueNPC = EventContext(questID, "QUEST_COMPLETE")
-    local missing                                = {}
+    local recent                                         = ClosedRun(questID)
+    local run                                            = runs[questID] or (recent and recent.run)
+    local npc, contextID, reference, dialogueNPC, method = EventContext(questID, "QUEST_COMPLETE", run)
+    local missing                                        = {}
     if not run then
         missing.quest_run_id = "not_observed"
     end
@@ -701,14 +732,15 @@ FT.On("QUEST_TURNED_IN", function(event, rawQuestID, xpReward, moneyReward)
     local id = FT.Emit("quest.turned_in", {
         quest_id = questID, quest_run_id = run and run.id, xp_reward = FT.Value(xpReward, "number"),
         money_reward = FT.Value(moneyReward, "number"), interaction_id = contextID,
-        npc = npc, dialogue_npc = dialogueNPC,
+        npc = npc, dialogue_npc = dialogueNPC, dialogue_context = method,
     }, event, "direct_event", Related(recent and recent.removal, reference),
         missing)
     if runs[questID] then
         recent = CloseRun(questID, run)
     end
-    if recent then
-        recent.turnin = id
+    if recent and id then
+        recent.turnin    = id
+        recent.turnin_at = FT.Now()
     end
 end)
 

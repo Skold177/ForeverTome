@@ -79,6 +79,211 @@ end
 
 return {
     {
+        name = "quests: receipt ambiguity lasts thirty seconds after a delayed turnin",
+        run = function(Host)
+            local host = Fixture(Host, true)
+            host:start()
+            host:event("QUEST_ACCEPTED", 501)
+            local first = host:last("quest.accepted")
+            host:event("QUEST_REMOVED", 501, false)
+            host:advance(29)
+            host:event("QUEST_TURNED_IN", 501, 40, 0)
+            local turnin         = host:last("quest.turned_in")
+            local runID, turninID = host.FT.QuestRewardContext(501)
+            host:assertEqual(runID, first.data.quest_run_id)
+            host:assertEqual(turninID, turnin.observation_id)
+            host:event("QUEST_ACCEPTED", 501)
+            local second = host:last("quest.accepted")
+            host:assertTrue(second.data.quest_run_id ~= first.data.quest_run_id)
+            host:advance(2)
+            runID, turninID = host.FT.QuestRewardContext(501)
+            host:assertEqual(runID, nil)
+            host:assertEqual(turninID, nil)
+            host:advance(29)
+            runID, turninID = host.FT.QuestRewardContext(501)
+            host:assertEqual(runID, second.data.quest_run_id)
+            host:assertEqual(turninID, nil)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: abandoning and reaccepting cannot discard an earlier receipt ambiguity window",
+        run = function(Host)
+            local host = Fixture(Host, true)
+            host:start()
+            host:event("QUEST_ACCEPTED", 501)
+            host:event("QUEST_TURNED_IN", 501, 40, 0)
+            host:advance(1)
+            host:event("QUEST_ACCEPTED", 501)
+            local runID = host.FT.QuestRewardContext(501)
+            host:assertEqual(runID, nil)
+            host:event("QUEST_REMOVED", 501, false)
+            host:event("QUEST_ACCEPTED", 501)
+            local latest = host:last("quest.accepted")
+            runID = host.FT.QuestRewardContext(501)
+            host:assertEqual(runID, nil)
+            host:advance(30)
+            local turninID
+            runID, turninID = host.FT.QuestRewardContext(501)
+            host:assertEqual(runID, latest.data.quest_run_id)
+            host:assertEqual(turninID, nil)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: reward dialogue survives a long closed panel and links delayed turnin",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_COMPLETE")
+            local reward = host:last("quest.dialogue")
+            host:event("QUEST_FINISHED")
+            state.npcID = nil
+            host:advance(43)
+            host:event("QUEST_REMOVED", 501, false)
+            local removal = host:last("quest.removed")
+            host:event("QUEST_TURNED_IN", 501, 380, 50)
+            local turnin = host:last("quest.turned_in")
+            host:assertEqual(turnin.data.quest_run_id, reward.data.quest_run_id)
+            host:assertEqual(turnin.data.dialogue_npc.creature_id, 7001)
+            host:assertEqual(turnin.data.dialogue_context, "quest_run_reward_dialogue")
+            host:assertEqual(turnin.data.npc, nil)
+            host:assertEqual(turnin.missing_fields.npc, "unknown_source")
+            host:assertEqual(turnin.related_observation_ids[1], removal.observation_id)
+            host:assertEqual(turnin.related_observation_ids[2], reward.observation_id)
+            host:assertEqual(turnin.data.xp_reward, 380)
+            host:assertEqual(turnin.data.money_reward, 50)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: unrelated dialogue does not erase the current run reward history",
+        run = function(Host)
+            for _, nextEvent in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_COMPLETE" }) do
+                local host, state = Fixture(Host)
+                DialogueFixture(host, state)
+                host:start()
+                host:event("QUEST_COMPLETE")
+                local reward = host:last("quest.dialogue")
+                host:event("QUEST_FINISHED")
+                state.dialogueQuestID = 502
+                state.npcID          = 7002
+                host:event(nextEvent)
+                host:event("QUEST_FINISHED")
+                state.npcID = nil
+                host:advance(43)
+                host:event("QUEST_TURNED_IN", 501, 380, 50)
+                local turnin = host:last("quest.turned_in")
+                host:assertEqual(turnin.data.dialogue_npc.creature_id, 7001)
+                host:assertEqual(turnin.data.interaction_id, reward.data.interaction_id)
+                host:assertEqual(turnin.related_observation_ids[1], reward.observation_id)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "quests: delayed turnin preserves an unrelated pending acceptance offer",
+        run = function(Host)
+            for _, cached in ipairs({ false, true }) do
+                local host, state = Fixture(Host, true)
+                DialogueFixture(host, state)
+                host:start()
+                host:event("QUEST_ACCEPTED", 501)
+                local reward
+                if cached then
+                    host:event("QUEST_COMPLETE")
+                    reward = host:last("quest.dialogue")
+                end
+                host:event("QUEST_FINISHED")
+                state.npcID = nil
+                host:advance(43)
+                state.dialogueQuestID = 502
+                state.npcID          = 7002
+                host:event("QUEST_DETAIL")
+                local offer = host:last("quest.dialogue")
+                host:event("QUEST_FINISHED")
+                state.npcID = nil
+                host:event("QUEST_TURNED_IN", 501, 40, 0)
+                local turnin = host:last("quest.turned_in")
+                host:assertEqual(turnin.related_observation_ids, reward and { reward.observation_id } or {})
+                host:event("QUEST_ACCEPTED", 502)
+                local accepted = host:last("quest.accepted")
+                host:assertEqual(accepted.data.quest_id, 502)
+                host:assertEqual(accepted.data.dialogue_npc.creature_id, 7002)
+                host:assertEqual(accepted.data.interaction_id, offer.data.interaction_id)
+                host:assertEqual(accepted.data.dialogue_context, "recent_dialogue")
+                host:assertEqual(accepted.related_observation_ids, { offer.observation_id })
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "quests: a new run cannot inherit a previous run reward dialogue",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_COMPLETE")
+            local reward = host:last("quest.dialogue")
+            host:event("QUEST_FINISHED")
+            host:event("QUEST_REMOVED", 501, false)
+            host:event("QUEST_ACCEPTED", 501)
+            state.npcID = nil
+            host:event("QUEST_TURNED_IN", 501, 380, 50)
+            local turnin = host:last("quest.turned_in")
+            host:assertTrue(turnin.data.quest_run_id ~= reward.data.quest_run_id)
+            host:assertEqual(turnin.data.dialogue_npc, nil)
+            host:assertEqual(turnin.data.dialogue_context, nil)
+            host:assertEqual(#turnin.related_observation_ids, 0)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: reset discards run reward history even if the quest remains in the log",
+        run = function(Host)
+            for _, reason in ipairs({ "pause", "world_transition", "collector_error", "user_clear" }) do
+                local host, state = Fixture(Host)
+                DialogueFixture(host, state)
+                host:start()
+                host:event("QUEST_COMPLETE")
+                host:event("QUEST_FINISHED")
+                state.npcID = nil
+                host.FT.ResetCollectors(reason)
+                Refresh(host)
+                host:event("QUEST_TURNED_IN", 501, 380, 50)
+                local turnin = host:last("quest.turned_in")
+                host:assertEqual(turnin.data.dialogue_npc, nil)
+                host:assertEqual(turnin.data.dialogue_context, nil)
+                host:assertEqual(#turnin.related_observation_ids, 0)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "quests: latest same-run reward dialogue replaces older reward context",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_COMPLETE")
+            local first = host:last("quest.dialogue")
+            host:event("QUEST_FINISHED")
+            state.npcID = 7002
+            host:event("QUEST_COMPLETE")
+            local latest = host:last("quest.dialogue")
+            host:event("QUEST_FINISHED")
+            state.npcID = nil
+            host:advance(43)
+            host:event("QUEST_TURNED_IN", 501, 380, 50)
+            local turnin = host:last("quest.turned_in")
+            host:assertEqual(turnin.data.dialogue_npc.creature_id, 7002)
+            host:assertEqual(turnin.related_observation_ids[1], latest.observation_id)
+            host:assertEqual(first.data.npc.creature_id, 7001)
+            host:assertHealthy()
+        end,
+    },
+    {
         name = "quests: acceptance links an open offer without treating it as historical NPC data",
         run = function(Host)
             local host, state = Fixture(Host, true)
