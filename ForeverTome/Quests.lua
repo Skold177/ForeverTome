@@ -5,6 +5,7 @@ local MAX_PENDING    = 32
 local MAX_ROWS       = 512
 local MAX_OBJECTIVES = 64
 local MAX_REWARDS    = 64
+local DIALOGUE_GRACE = 2
 local runs           = {}
 local pending        = {}
 local closed         = {}
@@ -12,6 +13,7 @@ local runCount       = 0
 local pendingCount   = 0
 local generation     = 0
 local interaction    = nil
+local dialogue       = nil
 local lastScanState  = nil
 local capacityNoted  = false
 
@@ -445,11 +447,38 @@ local function EnrichItems(items, observationID)
     end
 end
 
+local function CloseInteraction()
+    interaction = nil
+    if dialogue and not dialogue.closed_at then
+        dialogue.closed_at = FT.Now()
+    end
+end
+
+local function EventContext(questID, phase)
+    local recent    = dialogue
+    local npc       = FT.Unit("npc")
+    local contextID = npc and interaction
+    local reference
+    local dialogueNPC
+    dialogue = nil
+    if recent and recent.quest_id == questID and recent.phase == phase
+        and (not recent.closed_at or FT.Now() - recent.closed_at <= DIALOGUE_GRACE)
+        and (not npc or not recent.npc or npc.guid == recent.npc.guid) then
+        contextID = recent.interaction_id
+        reference = recent.observation_id
+        if not npc and recent.npc then
+            dialogueNPC = recent.npc
+        end
+    end
+    return npc, contextID, reference, dialogueNPC
+end
+
 local function Dialogue(event, questStartItemID)
     if not Enabled() or not FT.Profile.quest_dialogue then
         return
     end
     interaction = interaction or FT.NewContext("quest_dialogue")
+    dialogue    = nil
     local missing = {}
     local questID = ContentID(FT.Call("GetQuestID"))
     local data    = {
@@ -484,6 +513,12 @@ local function Dialogue(event, questStartItemID)
         missing.text = "not_ready"
     end
     local observationID = FT.Emit("quest.dialogue", data, event, "api_snapshot", nil, missing)
+    if observationID and questID then
+        dialogue = {
+            quest_id = questID, phase = event, npc = data.npc,
+            interaction_id = interaction, observation_id = observationID,
+        }
+    end
     EnrichItems(data.rewards, observationID)
     EnrichItems(data.choices, observationID)
     EnrichItems(data.required_items, observationID)
@@ -518,6 +553,7 @@ local function Gossip(event)
         return
     end
     interaction = interaction or FT.NewContext("quest_dialogue")
+    dialogue    = nil
     local missing = {}
     local data    = {
         interaction_id = interaction, interaction_type = "gossip", npc = FT.Unit("npc"),
@@ -579,6 +615,7 @@ local function Greeting(event)
         return
     end
     interaction = interaction or FT.NewContext("quest_dialogue")
+    dialogue    = nil
     local missing = {}
     local data    = {
         interaction_id = interaction, interaction_type = "quest_greeting", npc = FT.Unit("npc"),
@@ -634,11 +671,11 @@ FT.On("QUEST_ACCEPTED", function(event, first, second)
     end
     local run = NewRun(questID, "accepted", event)
     if run then
-        local npc = FT.Unit("npc")
+        local npc, contextID, reference, dialogueNPC = EventContext(questID, "QUEST_DETAIL")
         run.origin = FT.Emit("quest.accepted", {
-            quest_id = questID, quest_run_id = run.id, interaction_id = interaction,
-            npc = npc,
-        }, event, "direct_event", nil, not npc and { npc = "unknown_source" } or nil)
+            quest_id = questID, quest_run_id = run.id, interaction_id = contextID,
+            npc = npc, dialogue_npc = dialogueNPC,
+        }, event, "direct_event", Related(reference), not npc and { npc = "unknown_source" } or nil)
         ScheduleScan(event)
     end
 end)
@@ -651,10 +688,10 @@ FT.On("QUEST_TURNED_IN", function(event, rawQuestID, xpReward, moneyReward)
     if not questID then
         return
     end
-    local recent  = ClosedRun(questID)
-    local run     = runs[questID] or (recent and recent.run)
-    local npc     = FT.Unit("npc")
-    local missing = {}
+    local recent                                 = ClosedRun(questID)
+    local run                                    = runs[questID] or (recent and recent.run)
+    local npc, contextID, reference, dialogueNPC = EventContext(questID, "QUEST_COMPLETE")
+    local missing                                = {}
     if not run then
         missing.quest_run_id = "not_observed"
     end
@@ -663,9 +700,9 @@ FT.On("QUEST_TURNED_IN", function(event, rawQuestID, xpReward, moneyReward)
     end
     local id = FT.Emit("quest.turned_in", {
         quest_id = questID, quest_run_id = run and run.id, xp_reward = FT.Value(xpReward, "number"),
-        money_reward = FT.Value(moneyReward, "number"), interaction_id = interaction,
-        npc = npc,
-    }, event, "direct_event", Related(recent and recent.removal),
+        money_reward = FT.Value(moneyReward, "number"), interaction_id = contextID,
+        npc = npc, dialogue_npc = dialogueNPC,
+    }, event, "direct_event", Related(recent and recent.removal, reference),
         missing)
     if runs[questID] then
         recent = CloseRun(questID, run)
@@ -730,13 +767,11 @@ FT.On("QUEST_COMPLETE", Dialogue)
 FT.On("GOSSIP_SHOW", Gossip)
 FT.On("QUEST_GREETING", Greeting)
 
-FT.On("QUEST_FINISHED", function()
-    interaction = nil
-end)
+FT.On("QUEST_FINISHED", CloseInteraction)
 
 FT.On("GOSSIP_CLOSED", function(event, continuing)
     if FT.Value(continuing, "boolean") ~= true then
-        interaction = nil
+        CloseInteraction()
     end
 end)
 
@@ -748,6 +783,7 @@ FT.OnReset(function()
     runCount      = 0
     pendingCount  = 0
     interaction   = nil
+    dialogue      = nil
     lastScanState = nil
     capacityNoted = false
 end)

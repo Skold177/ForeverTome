@@ -1,6 +1,6 @@
 # Recorder implementation contract — schema 1
 
-This describes the runnable 0.2.0 addon. The original handbook, examples, acquisition backlog, and testing matrix remain research/plans; their unverified capabilities have not become runtime guarantees. The implementation uses the installed Forever Beta 1.60.1.69893 source profile, not the earlier Retail/Titan profiles.
+This describes the runnable 0.2.1 addon. The original handbook, examples, acquisition backlog, and testing matrix remain research/plans; their unverified capabilities have not become runtime guarantees. The implementation uses the installed Forever Beta 1.60.1.69893 source profile, not the earlier Retail/Titan profiles.
 
 ## Saved data
 
@@ -21,7 +21,7 @@ Missing values are omitted, with reasons where the collector can identify them. 
 - Creature sightings throttle unchanged GUID/dead state for a token to once per ten seconds. Route checks occur every five seconds, recording movement of at least 0.002 normalized combined coordinate distance, map/status changes, or a 60-second heartbeat.
 - Vendors: 250 offers/16 costs. Recipe schematics: 32 reagent slots/16 alternatives per slot. Spell and talent catalogs use bounded workers/chunks; see the [spell contract](implementation-spells.md) and [talent contract](implementation-talents.md) for their limits and API evidence.
 
-At capacity recording stops visibly without evicting history. Diagnostics persist outside the main record budget. Pausing, unavailable snapshots, transitions, and errors invalidate comparisons so gaps do not become invented progress. Metadata timeouts retain original observations and report unresolved information.
+At capacity recording stops visibly without evicting history. Diagnostics persist outside the main record budget. Pausing, unavailable snapshots, leaving the world, and errors invalidate comparisons so gaps do not become invented progress. Ordinary zone/subzone changes refresh location context while preserving collectors and pending work. Metadata timeouts retain original observations and report unresolved information.
 
 ## Evidence boundaries
 
