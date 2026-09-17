@@ -4,6 +4,9 @@ local MAX_LOOT_SLOTS  = 200
 local MAX_BAG_SLOTS   = 1000
 local MAX_PENDING    = 256
 local MAX_REFERENCES = 64
+local MAX_ITEM_STATS = 64
+local MAX_ITEM_LINES = 64
+local MAX_ITEM_READS = 3
 local ITEM_TIMEOUT   = 15
 local activeLoot     = nil
 local bagBaseline    = nil
@@ -52,6 +55,116 @@ local function itemAPI(method)
     end
 end
 
+local function itemStats(data, missing, link)
+    data.stats_link    = link
+    data.stats_context = "character_at_observation"
+    data.stats_method  = "C_Item.GetItemStats"
+    if not FT.Profile.item_stats or not FT.Resolve(data.stats_method) then
+        data.stats_status = "unsupported"
+        missing.stats     = "unsupported"
+        return false
+    end
+    local raw = FT.Value(FT.Call(data.stats_method, link), "table")
+    if not raw then
+        data.stats_status = "unavailable"
+        missing.stats     = "not_ready_or_unreadable"
+        return true
+    end
+    local stats   = {}
+    local labels  = {}
+    local reason  = nil
+    local count   = 0
+    local ok      = pcall(function()
+        for key, value in pairs(raw) do
+            count = count + 1
+            if count > MAX_ITEM_STATS then
+                reason = "capacity_limit"
+                break
+            end
+            local token  = FT.Value(key, "string")
+            local amount = FT.Value(value, "number")
+            if token and #token <= 128 and token:match("^[A-Z][A-Z0-9_]*$") and amount ~= nil then
+                stats[token] = amount
+                local label  = FT.Field(_G, token, "string")
+                if label and #label <= 256 then
+                    labels[token] = label
+                end
+            else
+                reason = "invalid_or_unreadable"
+            end
+        end
+    end)
+    if not ok then
+        reason = "invalid_or_unreadable"
+    end
+    data.stats        = stats
+    data.stat_labels  = labels
+    data.stats_status = reason and "partial" or "available"
+    missing.stats     = reason
+    return false
+end
+
+local function tooltipField(line, key, kind)
+    if not FT.Value(line, "table") then
+        return nil, true
+    end
+    local ok, raw = pcall(function()
+        return line[key]
+    end)
+    if not ok or not FT.Readable(raw) then
+        return nil, true
+    end
+    if raw == nil then
+        return nil, false
+    end
+    local value = FT.Value(raw, kind)
+    if value == nil or kind == "string" and #value > 1024 then
+        return nil, true
+    end
+    return value, false
+end
+
+local function itemTooltip(data, missing, link)
+    data.tooltip_link    = link
+    data.tooltip_context = "character_at_observation"
+    data.tooltip_method  = "C_TooltipInfo.GetHyperlink"
+    if not FT.Profile.item_tooltips or not FT.Resolve(data.tooltip_method) then
+        data.tooltip_status   = "unsupported"
+        missing.tooltip_lines = "unsupported"
+        return false
+    end
+    local raw   = FT.Call(data.tooltip_method, link)
+    local lines = FT.Field(raw, "lines", "table")
+    local count = FT.Length(lines)
+    if not count then
+        data.tooltip_status   = "unavailable"
+        missing.tooltip_lines = "not_ready_or_unreadable"
+        return true
+    end
+    data.tooltip_lines = {}
+    local reason       = count > MAX_ITEM_LINES and "capacity_limit" or nil
+    for index = 1, math.min(count, MAX_ITEM_LINES) do
+        local rawLine         = FT.Field(lines, index, "table")
+        local left, badLeft   = tooltipField(rawLine, "leftText", "string")
+        local right, badRight = tooltipField(rawLine, "rightText", "string")
+        local kind, badKind   = tooltipField(rawLine, "type", "number")
+        local lineType        = number(kind, 0, 255)
+        if badLeft or badRight or badKind or kind ~= nil and lineType == nil then
+            reason = reason or "invalid_or_unreadable"
+        end
+        if left ~= nil or right ~= nil or lineType ~= nil then
+            data.tooltip_lines[#data.tooltip_lines + 1] = {
+                index = index, left_text = left, right_text = right, type = lineType,
+            }
+        else
+            reason = reason or "invalid_or_unreadable"
+        end
+    end
+    data.tooltip_status   = reason and "partial" or "available"
+    missing.tooltip_lines = reason
+    return false
+end
+
 local function readItem(itemID, link)
     local method = itemAPI("GetItemInfo")
     if not method then
@@ -64,7 +177,7 @@ local function readItem(itemID, link)
     if not name then
         return nil
     end
-    return {
+    local data = {
         item_id           = itemID,
         requested_link    = link,
         link              = FT.Value(resolvedLink, "string"),
@@ -87,6 +200,11 @@ local function readItem(itemID, link)
         crafting_reagent  = FT.Value(craftingReagent, "boolean"),
         description       = FT.Value(description, "string"),
     }
+    local missing      = {}
+    local itemLink     = link or "item:" .. tostring(itemID)
+    local statsPending = itemStats(data, missing, itemLink)
+    local linesPending = itemTooltip(data, missing, itemLink)
+    return data, missing, statsPending or linesPending
 end
 
 local function removePending(key)
@@ -107,23 +225,32 @@ local function unresolved(pending, reason, event, status)
     }, event, "api_snapshot", pending.references, { metadata = reason })
 end
 
-local function resolveItem(key, event)
+local function resolveItem(key, event, final)
     local pending = pendingItems[key]
     if not pending then
         return false
     end
-    local metadata = readItem(pending.item_id, pending.link)
+    local metadata, missing, retry = readItem(pending.item_id, pending.link)
     if not metadata then
         return false
     end
-    removePending(key)
-    FT.Emit("item.metadata", metadata, {
-        event             = event,
-        method            = "item_metadata_read",
-        trigger_elapsed_s = pending.requested_at,
-        sampled_elapsed_s = FT.Now(),
-    }, "api_snapshot", pending.references)
-    return true
+    pending.metadata_reads = (pending.metadata_reads or 0) + 1
+    if not same(metadata, pending.metadata) or not same(missing, pending.missing) or #pending.references ~= pending.reference_count then
+        FT.Emit("item.metadata", metadata, {
+            event             = event,
+            method            = "item_metadata_read",
+            trigger_elapsed_s = pending.requested_at,
+            sampled_elapsed_s = FT.Now(),
+        }, "api_snapshot", pending.references, missing)
+        pending.metadata        = metadata
+        pending.missing         = missing
+        pending.reference_count = #pending.references
+    end
+    if not retry or final or pending.metadata_reads >= MAX_ITEM_READS then
+        removePending(key)
+        return true
+    end
+    return false
 end
 
 local function scheduleItemTimeouts()
@@ -134,15 +261,22 @@ local function scheduleItemTimeouts()
         end
         local keys = {}
         for key, pending in pairs(pendingItems) do
-            if FT.Now() - pending.requested_at >= ITEM_TIMEOUT then
+            if pending.metadata or FT.Now() - pending.requested_at >= ITEM_TIMEOUT then
                 keys[#keys + 1] = key
             end
         end
         for _, key in ipairs(keys) do
-            if not resolveItem(key) then
-                local pending = removePending(key)
-                if pending then
-                    unresolved(pending, "not_ready", nil, "timeout")
+            if requestGeneration ~= generation then
+                return
+            end
+            local pending = pendingItems[key]
+            if pending then
+                local expired = FT.Now() - pending.requested_at >= ITEM_TIMEOUT
+                if not resolveItem(key, nil, expired) and expired then
+                    pending = removePending(key)
+                    if pending then
+                        unresolved(pending, "not_ready", nil, "timeout")
+                    end
                 end
             end
         end
@@ -223,7 +357,9 @@ local function itemLoaded(event, itemID, success)
         if not resolveItem(key, event) and success == false then
             local pending = removePending(key)
             if pending then
-                unresolved(pending, "not_ready", event, "load_failed")
+                if not pending.metadata then
+                    unresolved(pending, "not_ready", event, "load_failed")
+                end
             end
         end
     end

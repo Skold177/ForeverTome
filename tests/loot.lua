@@ -50,6 +50,24 @@ end
 local firstLink  = "|cff1eff00|Hitem:101:0:0:0:0:0:11:0|h[Test Hood]|h|r"
 local secondLink = "|cff1eff00|Hitem:101:0:0:0:0:0:12:0|h[Test Hood]|h|r"
 
+local function itemDetails(host, state)
+    state.stats            = {}
+    state.tooltips         = {}
+    state.stats_requests   = {}
+    state.tooltip_requests = {}
+    host.env.C_Item.GetItemStats = function(link)
+        host:assertEqual(type(link), "string")
+        state.stats_requests[#state.stats_requests + 1] = link
+        return state.stats[link]
+    end
+    host.env.C_TooltipInfo = {
+        GetHyperlink = function(link)
+            state.tooltip_requests[#state.tooltip_requests + 1] = link
+            return state.tooltips[link]
+        end,
+    }
+end
+
 local function rewardDialogue(host, questID)
     host.env.GetQuestID = function()
         return questID
@@ -77,6 +95,220 @@ local function rewardDialogue(host, questID)
 end
 
 return {
+    {
+        name = "item details preserve armor stats zero values tooltip text icons and exact variants",
+        run = function(Host)
+            local host, state = configured(Host)
+            itemDetails(host, state)
+            host.env.RESISTANCE0_NAME       = "Armor"
+            host.env.ITEM_MOD_STAMINA_SHORT = "Stamina"
+            state.metadata[firstLink]      = { name = "First Hood", link = firstLink }
+            state.metadata[secondLink]     = { name = "Second Hood", link = secondLink }
+            state.stats[firstLink]         = { RESISTANCE0_NAME = 31, ITEM_MOD_STAMINA_SHORT = 2, ITEM_MOD_AGILITY_SHORT = 0 }
+            state.stats[secondLink]        = { RESISTANCE0_NAME = 33, ITEM_MOD_STAMINA_SHORT = 4 }
+            state.tooltips[firstLink]      = { lines = {
+                { type = 0, leftText = "10 - 20 Damage", rightText = "Speed 2.00" },
+                { type = 0, leftText = "Equip: A synthetic effect." },
+            } }
+            state.tooltips[secondLink]     = { lines = {} }
+            for _, link in ipairs({ firstLink, secondLink }) do
+                host:event("QUEST_LOOT_RECEIVED", 501, link, 1)
+            end
+            local metadata = host:records("item.metadata")
+            host:assertEqual(#metadata, 2)
+            host:assertEqual(metadata[1].data.stats, state.stats[firstLink])
+            host:assertEqual(metadata[2].data.stats, state.stats[secondLink])
+            host:assertEqual(metadata[1].data.stat_labels.RESISTANCE0_NAME, "Armor")
+            host:assertEqual(metadata[1].data.stat_labels.ITEM_MOD_STAMINA_SHORT, "Stamina")
+            host:assertEqual(metadata[1].data.stats_link, firstLink)
+            host:assertEqual(metadata[2].data.stats_link, secondLink)
+            host:assertEqual(metadata[1].data.stats_context, "character_at_observation")
+            host:assertEqual(metadata[1].data.stats_status, "available")
+            host:assertEqual(metadata[1].data.tooltip_lines[1], {
+                index = 1, type = 0, left_text = "10 - 20 Damage", right_text = "Speed 2.00",
+            })
+            host:assertEqual(metadata[1].data.tooltip_status, "available")
+            host:assertEqual(metadata[1].data.icon_id, 134400)
+            host:assertEqual(metadata[1].missing_fields, {})
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "item details distinguish missing from empty and append delayed enrichment",
+        run = function(Host)
+            local host, state = configured(Host)
+            itemDetails(host, state)
+            state.metadata[firstLink] = { name = "Known name", link = firstLink }
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local original = host:last("item.metadata")
+            host:assertEqual(original.data.name, "Known name")
+            host:assertEqual(original.data.stats, nil)
+            host:assertEqual(original.data.tooltip_lines, nil)
+            host:assertEqual(original.data.stats_status, "unavailable")
+            host:assertEqual(original.missing_fields.stats, "not_ready_or_unreadable")
+            host:assertEqual(original.missing_fields.tooltip_lines, "not_ready_or_unreadable")
+            state.stats[firstLink]    = {}
+            state.tooltips[firstLink] = { lines = {} }
+            host:advance(1.2)
+            local metadata = host:records("item.metadata")
+            host:assertEqual(#metadata, 2)
+            host:assertEqual(metadata[1], original)
+            host:assertEqual(metadata[2].data.stats, {})
+            host:assertEqual(metadata[2].data.tooltip_lines, {})
+            host:assertEqual(metadata[2].data.stats_status, "available")
+            host:assertEqual(metadata[2].data.tooltip_status, "available")
+            host:assertEqual(metadata[2].related_observation_ids, original.related_observation_ids)
+            host:advance(20)
+            host:assertEqual(#state.stats_requests, 2)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "item details sanitize malformed and secret fields without dropping basic metadata",
+        run = function(Host)
+            local host, state = configured(Host)
+            itemDetails(host, state)
+            state.metadata[firstLink] = { name = "Readable name", link = firstLink }
+            state.stats[firstLink]    = {
+                RESISTANCE0_NAME = 12, ITEM_MOD_STAMINA_SHORT = { secret = true },
+                INVALID_FINITE = math.huge, ["bad token"] = 4, [false] = 3,
+            }
+            state.tooltips[firstLink] = { lines = {
+                { type = 0, leftText = { secret = true }, rightText = "Readable side" },
+                { secret = true },
+                { type = -1, leftText = string.rep("x", 1025) },
+                { type = 0, leftText = "Valid description" },
+            } }
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local metadata = host:last("item.metadata")
+            host:assertEqual(metadata.data.name, "Readable name")
+            host:assertEqual(metadata.data.stats, { RESISTANCE0_NAME = 12 })
+            host:assertEqual(metadata.data.stats_status, "partial")
+            host:assertEqual(metadata.data.tooltip_status, "partial")
+            host:assertEqual(metadata.data.tooltip_lines, {
+                { index = 1, type = 0, right_text = "Readable side" },
+                { index = 4, type = 0, left_text = "Valid description" },
+            })
+            host:assertEqual(metadata.missing_fields.stats, "invalid_or_unreadable")
+            host:assertEqual(metadata.missing_fields.tooltip_lines, "invalid_or_unreadable")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "item details bound unavailable and secret retries without duplicate records",
+        run = function(Host)
+            local host, state = configured(Host)
+            itemDetails(host, state)
+            state.metadata[firstLink] = { name = "Readable name", link = firstLink }
+            state.stats[firstLink]    = { secret = true }
+            state.tooltips[firstLink] = { lines = { secret = true } }
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            host:advance(20)
+            host:event("ITEM_DATA_LOAD_RESULT", 101, true)
+            host:assertEqual(#state.stats_requests, 3)
+            host:assertEqual(#state.tooltip_requests, 3)
+            host:assertEqual(#host:records("item.metadata"), 1)
+            host:assertEqual(#host:records("item.metadata_unresolved"), 0)
+            host:assertEqual(host:last("item.metadata").data.stats, nil)
+            host:assertEqual(host:last("item.metadata").data.tooltip_lines, nil)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "item details cap stats and tooltip lines with explicit missing reasons",
+        run = function(Host)
+            local host, state = configured(Host)
+            itemDetails(host, state)
+            state.metadata[firstLink] = { name = "Bounded item", link = firstLink }
+            state.stats[firstLink]    = {}
+            state.tooltips[firstLink] = { lines = {} }
+            for index = 1, 65 do
+                state.stats[firstLink]["ITEM_MOD_TEST_" .. index] = index
+                state.tooltips[firstLink].lines[index]          = { type = 0, leftText = "Line " .. index }
+            end
+            host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+            local metadata = host:last("item.metadata")
+            local count    = 0
+            for _ in pairs(metadata.data.stats) do
+                count = count + 1
+            end
+            host:assertEqual(count, 64)
+            host:assertEqual(#metadata.data.tooltip_lines, 64)
+            host:assertEqual(metadata.missing_fields.stats, "capacity_limit")
+            host:assertEqual(metadata.missing_fields.tooltip_lines, "capacity_limit")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "item details use string item IDs and retain requested versus resolved links",
+        run = function(Host)
+            local host, state = configured(Host)
+            itemDetails(host, state)
+            state.metadata[101]        = { name = "Resolved item", link = firstLink }
+            state.stats["item:101"]     = { RESISTANCE0_NAME = 9 }
+            state.tooltips["item:101"] = { lines = {} }
+            local sourceID = host.FT.Emit("test.item", { item_id = 101 }, { method = "test_fixture" })
+            host.FT.RequestItem(101, nil, sourceID)
+            local metadata = host:last("item.metadata")
+            host:assertEqual(metadata.data.stats_link, "item:101")
+            host:assertEqual(metadata.data.tooltip_link, "item:101")
+            host:assertEqual(metadata.data.requested_link, nil)
+            host:assertEqual(metadata.data.link, firstLink)
+            host:assertEqual(state.stats_requests, { "item:101" })
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "item enrichment capacity reset cancels the remaining pending variants safely",
+        run = function(Host)
+            for budget = 0, 1 do
+                local host, state = configured(Host)
+                itemDetails(host, state)
+                local links = { firstLink, secondLink, "item:101:0:0:0:0:0:13" }
+                for _, link in ipairs(links) do
+                    state.metadata[link] = { name = "Pending details", link = link }
+                    host:event("QUEST_LOOT_RECEIVED", 501, link, 1)
+                    state.stats[link]    = { RESISTANCE0_NAME = 10 }
+                    state.tooltips[link] = { lines = {} }
+                end
+                local prefix = host:records()
+                host.FT.LIMITS.records = #prefix + budget
+                host:advance(1.2)
+                local final = host:records()
+                for index, original in ipairs(prefix) do
+                    host:assertEqual(final[index], original)
+                end
+                host:assertEqual(host.FT.Status().blocked, "capacity_limit")
+                host:assertTrue(#final <= #prefix + budget)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "item details require supported profile and readable APIs",
+        run = function(Host)
+            for _, disabled in ipairs({ false, true }) do
+                local host, state = configured(Host)
+                if disabled then
+                    itemDetails(host, state)
+                    host.FT.Profile.item_stats    = false
+                    host.FT.Profile.item_tooltips = false
+                end
+                state.metadata[firstLink] = { name = "Basic metadata", link = firstLink }
+                host:event("QUEST_LOOT_RECEIVED", 501, firstLink, 1)
+                host:advance(3)
+                local metadata = host:last("item.metadata")
+                host:assertEqual(metadata.data.stats_status, "unsupported")
+                host:assertEqual(metadata.data.tooltip_status, "unsupported")
+                host:assertEqual(metadata.missing_fields.stats, "unsupported")
+                host:assertEqual(metadata.missing_fields.tooltip_lines, "unsupported")
+                host:assertEqual(#host:records("item.metadata"), 1)
+                host:assertEqual(state.stats_requests or {}, {})
+                host:assertEqual(state.tooltip_requests or {}, {})
+                host:assertHealthy()
+            end
+        end,
+    },
     {
         name = "quest reward events before turnin retain closed reward dialogue without inventing turnin",
         run = function(Host)

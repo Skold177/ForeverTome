@@ -100,6 +100,180 @@ local function entries(h, bank)
 end
 
 local suite = {
+    { name = "negative client cast-time sentinels stay separate from valid zero and fractional durations", run = function(Host)
+        local h = Host.new()
+        setup(h)
+        h:start()
+        h:advance(2)
+        local original = h.env.C_Spell.GetSpellInfo
+        h.env.C_Spell.GetSpellInfo = function(id)
+            local data    = original(id)
+            data.castTime = h.state.reportedCastTime
+            return data
+        end
+        for index, duration in ipairs({ -1000000, 0, 1.25 }) do
+            h.state.reportedCastTime = duration
+            h.FT.RequestSpell(800 + index)
+            h:advance(0.3)
+            local metadata = h:last("spell.metadata")
+            if duration < 0 then
+                assert(metadata.data.castTime == nil and metadata.data.reported_cast_time_ms == duration)
+                assert(metadata.data.cast_time_status == "invalid_result")
+                assert(metadata.missing_fields["data.castTime"] == "invalid_result")
+            else
+                assert(metadata.data.castTime == duration and metadata.data.reported_cast_time_ms == nil)
+                assert(metadata.data.cast_time_status == "available")
+                assert(metadata.missing_fields["data.castTime"] == nil)
+            end
+        end
+        h:assertHealthy()
+    end },
+    { name = "spell tooltips retain damage text alongside cast time mana range and current cooldowns", run = function(Host)
+        local h = Host.new()
+        setup(h)
+        h:start()
+        h:advance(2)
+        h.state.spellCost = 0
+        h.env.GameTooltip = setmetatable({}, { __index = function()
+            error("visible tooltip must not be touched")
+        end })
+        h.env.C_TooltipInfo = { GetSpellByID = function(id, isPet, showSubtext, dontOverride)
+            assert(id == 800 and isPet == nil and showSubtext == true and dontOverride == true)
+            return { lines = {
+                { type = 0, leftText = "0 Mana", rightText = "40 yd range" },
+                { type = 0, leftText = "1.5 sec cast" },
+                { type = 0, leftText = "Deals 12 to 18 Fire damage over 6 sec." },
+            } }
+        end }
+        h.env.C_Spell.GetSpellDescription = function()
+            return "Deals 12 to 18 Fire damage over 6 sec."
+        end
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "player", "synthetic-cast", 800)
+        local source = h:last("spell.succeeded")
+        h:advance(0.3)
+        local metadata = h:last("spell.metadata")
+        assert(metadata.data.spell_id == 800 and metadata.data.castTime == 1500)
+        assert(metadata.data.minRange == 0 and metadata.data.maxRange == 40)
+        assert(metadata.data.current_state.power_costs[1].cost == 0)
+        assert(metadata.data.current_state.power_costs[1].costPerSec == 0)
+        assert(metadata.data.current_state.cooldown.duration == 10)
+        assert(metadata.data.current_state.charges.currentCharges == 1)
+        assert(metadata.data.tooltip_status == "available")
+        assert(metadata.data.tooltip_method == "C_TooltipInfo.GetSpellByID")
+        assert(metadata.data.tooltip_context == "character_at_observation")
+        assert(metadata.data.tooltip_lines[3].left_text == "Deals 12 to 18 Fire damage over 6 sec.")
+        assert(metadata.data.tooltip_lines[1].type == 0 and metadata.data.tooltip_lines[1].index == 1)
+        assert(metadata.data.damage == nil and metadata.data.base_cooldown_ms == nil)
+        assert(metadata.related_observation_ids[1] == source.observation_id)
+        h:assertHealthy()
+    end },
+    { name = "spell tooltips distinguish missing and readable empty data with immutable enrichment", run = function(Host)
+        local h = Host.new()
+        setup(h)
+        h:start()
+        h:advance(2)
+        h.env.C_TooltipInfo = { GetSpellByID = function()
+            return h.state.spellTooltip
+        end }
+        h.FT.RequestSpell(800)
+        h:advance(0.2)
+        local first = h:last("spell.metadata")
+        assert(first.data.tooltip_lines == nil and first.data.tooltip_status == "unavailable")
+        assert(first.data.text_status == "available")
+        assert(first.missing_fields["data.tooltip_lines"] == "not_ready_or_restricted")
+        local before = #h:records("spell.metadata")
+        h.state.spellTooltip = { lines = {} }
+        h:event("SPELL_TEXT_UPDATE", 800)
+        h:advance(0.3)
+        local final = h:last("spell.metadata")
+        assert(#h:records("spell.metadata") == before + 1)
+        assert(final.data.tooltip_status == "available" and #final.data.tooltip_lines == 0)
+        assert(final.missing_fields["data.tooltip_lines"] == nil)
+        assert(first.data.tooltip_lines == nil and first.data.tooltip_status == "unavailable")
+        assert(h.FT.SpellStatus().pending == 0)
+        h:assertHealthy()
+    end },
+    { name = "spell tooltip sanitization bounds lines and rejects secret malformed and oversized fields", run = function(Host)
+        local h = Host.new()
+        setup(h)
+        h:start()
+        h:advance(2)
+        local lines = {}
+        for index = 1, 65 do
+            lines[index] = { type = 0, leftText = "Line " .. index }
+        end
+        lines[1] = { type = 0, leftText = { secret = true }, rightText = "Readable side" }
+        lines[2] = { type = 0, leftText = string.rep("x", 1025) }
+        lines[3] = { type = { secret = true }, leftText = "Readable text" }
+        lines[4] = { secret = true }
+        lines[5] = { type = math.huge, leftText = 7, rightText = "Valid" }
+        h.env.C_TooltipInfo = { GetSpellByID = function()
+            return { lines = lines }
+        end }
+        h.FT.RequestSpell(800)
+        h:advance(0.3)
+        local data = h:last("spell.metadata").data
+        assert(data.tooltip_status == "partial" and #data.tooltip_lines == 63)
+        assert(data.tooltip_lines[1].left_text == nil and data.tooltip_lines[1].right_text == "Readable side")
+        assert(data.tooltip_lines[2].left_text == nil and data.tooltip_lines[2].type == 0)
+        assert(data.tooltip_lines[3].type == nil and data.tooltip_lines[3].left_text == "Readable text")
+        assert(data.tooltip_lines[4].index == 5 and data.tooltip_lines[4].right_text == "Valid")
+        assert(data.tooltip_lines[63].index == 64)
+        assert(h:last("spell.metadata").missing_fields["data.tooltip_lines"] == "capacity_limit")
+        assert(h.FT.SpellStatus().pending == 0)
+        h:assertHealthy()
+    end },
+    { name = "unreadable spell tooltips exhaust three reads without mislabeling available description", run = function(Host)
+        local h = Host.new()
+        setup(h)
+        h:start()
+        h:advance(2)
+        local reads = 0
+        h.env.C_TooltipInfo = { GetSpellByID = function()
+            reads = reads + 1
+            return { secret = true }
+        end }
+        h.FT.RequestSpell(800)
+        h:advance(8)
+        assert(reads == 3 and h.FT.SpellStatus().pending == 0)
+        assert(h.state.spellLoads == 2)
+        local metadata    = h:last("spell.metadata")
+        local unavailable = h:last("spell.metadata_unavailable")
+        assert(metadata.data.text_status == "available" and metadata.data.tooltip_status == "unavailable")
+        assert(metadata.data.tooltip_lines == nil and metadata.data.description == "Description 800")
+        assert(unavailable.data.reason == "tooltip_not_ready_after_retries" and unavailable.data.attempts == 3)
+        assert(unavailable.missing_fields["data.description"] == nil)
+        assert(unavailable.missing_fields["data.tooltip_lines"] == "not_ready")
+        h:advance(20)
+        assert(reads == 3)
+        h:assertHealthy()
+    end },
+    { name = "spell tooltip reads require supported profile API and a validated numeric spell ID", run = function(Host)
+        for _, disabled in ipairs({ false, true }) do
+            local h = Host.new()
+            setup(h)
+            h:start()
+            h:advance(2)
+            if disabled then
+                h.env.C_TooltipInfo = { GetSpellByID = function()
+                    error("profile-disabled tooltip API called")
+                end }
+                h.FT.Profile.spell_tooltips = false
+            end
+            h.FT.RequestSpell(800)
+            h:advance(0.3)
+            local metadata = h:last("spell.metadata")
+            assert(metadata.data.tooltip_status == "unsupported" and metadata.data.tooltip_lines == nil)
+            assert(metadata.missing_fields["data.tooltip_lines"] == "unsupported")
+            local count = #h:records("spell.metadata")
+            for _, id in ipairs({ 0, -1, 1.5, math.huge, "800", { secret = true } }) do
+                h.FT.RequestSpell(id)
+            end
+            h:advance(8)
+            assert(#h:records("spell.metadata") == count and h.FT.SpellStatus().pending == 0)
+            h:assertHealthy()
+        end
+    end },
     { name = "full book retains passive future offspec overrides flyouts and pet spells", run = function(Host)
         local h = Host.new()
         setup(h)

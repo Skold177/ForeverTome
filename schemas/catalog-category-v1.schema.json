@@ -1,0 +1,469 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ForeverTome category catalog v1",
+  "type": "object",
+  "required": [
+    "format",
+    "schemaVersion",
+    "generatorVersion",
+    "category",
+    "exportId",
+    "source",
+    "contexts",
+    "entries",
+    "records",
+    "sessions",
+    "semantics"
+  ],
+  "properties": {
+    "format": {
+      "const": "forevertome.catalog-category"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "generatorVersion": {
+      "type": "string"
+    },
+    "category": {
+      "enum": [
+        "spells",
+        "talents",
+        "items",
+        "quests",
+        "monsters",
+        "npcs",
+        "gathering"
+      ]
+    },
+    "exportId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "sha256",
+        "schemaVersion",
+        "synthetic",
+        "observationCount"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "synthetic": {
+          "type": "boolean"
+        },
+        "observationCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "contexts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "product",
+          "client"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "client": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "contextId",
+          "data",
+          "diagnostics"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "contextId": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "diagnostics": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "selection": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "entity": {
+      "type": "object",
+      "required": [
+        "key",
+        "contextId",
+        "kind",
+        "nativeId",
+        "display",
+        "sourceIds",
+        "facts",
+        "details"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "nativeId": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "display": {
+          "type": "object"
+        },
+        "displaySourceId": {
+          "type": "string"
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fact"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "link",
+              "sourceIds"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "link": {
+                "type": "string"
+              },
+              "sourceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fact": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "path",
+        "data",
+        "sourceIds"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "data": {},
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "record": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "sessionId",
+        "contextId",
+        "sequence",
+        "elapsedSeconds",
+        "data",
+        "capture",
+        "evidence",
+        "missingFields",
+        "relatedIds",
+        "entities"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "elapsedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "observedAtUnix": {
+          "type": "number",
+          "minimum": 0
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "location": {
+          "type": "object"
+        },
+        "data": {
+          "type": "object"
+        },
+        "capture": {
+          "type": "object"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "missingFields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "relatedIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "role",
+              "path"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "channel": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "gathering": {
+      "type": "object",
+      "required": [
+        "id",
+        "contextId",
+        "sessionId",
+        "profession",
+        "spellId",
+        "elapsedSeconds",
+        "sourceIds",
+        "evidence",
+        "classification",
+        "positionMeaning",
+        "resourceIdentity",
+        "receivedItems"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "profession": {
+          "enum": [
+            "herbalism",
+            "mining",
+            "skinning"
+          ]
+        },
+        "spellId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "elapsedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "classification": {
+          "type": "object"
+        },
+        "positionMeaning": {
+          "const": "player_at_successful_gathering_cast"
+        },
+        "resourceIdentity": {
+          "const": "not_observed"
+        },
+        "receivedItems": {
+          "const": "not_attributed"
+        },
+        "spellKey": {
+          "type": "string"
+        },
+        "spellName": {
+          "type": "string"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "observedAtUnix": {
+          "type": "number",
+          "minimum": 0
+        },
+        "location": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "const": "gathering"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/gathering"
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/entity"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

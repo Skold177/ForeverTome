@@ -264,6 +264,8 @@ class SavedVariablesTests(unittest.TestCase):
                 self.assertEqual(original["data"]["quest_id"], 123)
 
     def test_actual_addon_reload_savedvariables_json_sqlite_round_trip(self):
+        from hashlib import sha256
+
         script = r'''
 local Host = dofile("tests/support/host.lua")
 local h    = Host.new()
@@ -371,6 +373,35 @@ end
 e.C_Traits.GetTraitDescription = function(entryID, rank)
     return "Talent " .. entryID .. " rank " .. rank
 end
+local firstLink  = "|cff1eff00|Hitem:11584:0:0:0:0:0:11:0|h[Synthetic armor]|h|r"
+local secondLink = "|cff1eff00|Hitem:247846:0:0:0:0:0:12:0|h[Synthetic gloves]|h|r"
+local itemNames  = { [firstLink] = "Synthetic armor", [secondLink] = "Synthetic gloves" }
+local itemStats  = {
+    [firstLink]  = { RESISTANCE0_NAME = 35, ITEM_MOD_STAMINA_SHORT = 0, ITEM_MOD_CRIT_RATING_SHORT = 1.25 },
+    [secondLink] = { RESISTANCE0_NAME = 0, ITEM_MOD_STAMINA_SHORT = 4, ITEM_MOD_CRIT_RATING_SHORT = 2.5 },
+}
+e.RESISTANCE0_NAME           = "Armor"
+e.ITEM_MOD_STAMINA_SHORT     = "Stamina"
+e.ITEM_MOD_CRIT_RATING_SHORT = "Critical Strike"
+e.C_Item.GetItemInfo = function(link)
+    if itemNames[link] then
+        return itemNames[link], link, 2, 10, 1, "Armor", "Cloth", 1, "INVTYPE_CHEST", 134400,
+            125, 4, 1, 2, 0, nil, false, "Synthetic armor description"
+    end
+end
+e.C_Item.GetItemStats = function(link)
+    assert(link == firstLink or link == secondLink)
+    return itemStats[link]
+end
+e.C_TooltipInfo = {}
+e.C_TooltipInfo.GetHyperlink = function(link)
+    assert(link == firstLink or link == secondLink)
+    return { lines = {
+        { leftText = itemNames[link], rightText = "Soulbound", type = 0 },
+        { leftText = tostring(itemStats[link].RESISTANCE0_NAME) .. " Armor", type = 0 },
+        { leftText = "+" .. tostring(itemStats[link].ITEM_MOD_STAMINA_SHORT) .. " Stamina", type = 0 },
+    } }
+end
 h:start()
 h.env.SlashCmdList.FOREVERTOME("dump")
 h:advance(5)
@@ -401,8 +432,8 @@ h:advance(43)
 h:event("QUEST_REMOVED", 501, false)
 h:event("QUEST_TURNED_IN", 501, 380, 50)
 h:advance(11)
-h:event("QUEST_LOOT_RECEIVED", 501, "item:11584", 10)
-h:event("QUEST_LOOT_RECEIVED", 501, "item:247846", 1)
+h:event("QUEST_LOOT_RECEIVED", 501, firstLink, 10)
+h:event("QUEST_LOOT_RECEIVED", 501, secondLink, 1)
 h:assertHealthy()
 h.FT.Emit("item.metadata", { item_id = 123, name = "Caf\195\169", description = "First\nSecond" }, "ITEM_DATA_LOAD_RESULT")
 h:event("PLAYER_LOGOUT")
@@ -436,7 +467,8 @@ io.write("ForeverTomeDB = " .. serialize(database))
         database = export.parse_saved_variables(process.stdout)
         self.assertEqual(len(database["sessions"]), 2)
         self.assertTrue(database["synthetic"])
-        original = next(row for row in database["sessions"][0]["observations"] if row["kind"] == "item.metadata")
+        original = next(row for row in database["sessions"][0]["observations"]
+                        if row["kind"] == "item.metadata" and row["data"]["item_id"] == 123)
         self.assertEqual(original["data"], {"item_id": 123, "name": "Café", "description": "First\nSecond"})
         observations = database["sessions"][0]["observations"]
         accepted     = next(row for row in observations if row["kind"] == "quest.accepted")
@@ -459,6 +491,50 @@ io.write("ForeverTomeDB = " .. serialize(database))
             self.assertEqual(receipt["data"]["quest_id"], 501)
             self.assertEqual(receipt["data"]["quest_run_id"], turnin["data"]["quest_run_id"])
             self.assertEqual(receipt["related_observation_ids"], [turnin["observation_id"], reward_dialogue["observation_id"]])
+        item_metadata  = {row["data"]["item_id"]: row for row in observations
+                          if row["kind"] == "item.metadata" and row["data"]["item_id"] != 123}
+        expected_stats = {
+            11584: {"RESISTANCE0_NAME": 35, "ITEM_MOD_STAMINA_SHORT": 0, "ITEM_MOD_CRIT_RATING_SHORT": 1.25},
+            247846: {"RESISTANCE0_NAME": 0, "ITEM_MOD_STAMINA_SHORT": 4, "ITEM_MOD_CRIT_RATING_SHORT": 2.5},
+        }
+        self.assertEqual(set(item_metadata), set(expected_stats))
+        for receipt in receipts:
+            item_id = receipt["data"]["item_id"]
+            row     = item_metadata[item_id]
+            item    = row["data"]
+            self.assertEqual(item["stats"], expected_stats[item_id])
+            self.assertEqual(item["stats_status"], "available")
+            self.assertEqual(item["stat_labels"], {
+                "RESISTANCE0_NAME": "Armor", "ITEM_MOD_STAMINA_SHORT": "Stamina",
+                "ITEM_MOD_CRIT_RATING_SHORT": "Critical Strike",
+            })
+            self.assertEqual(item["icon_id"], 134400)
+            self.assertEqual(item["tooltip_status"], "available")
+            self.assertEqual(item["tooltip_lines"], [
+                {"index": 1, "left_text": item["name"], "right_text": "Soulbound", "type": 0},
+                {"index": 2, "left_text": f"{expected_stats[item_id]['RESISTANCE0_NAME']} Armor", "type": 0},
+                {"index": 3, "left_text": f"+{expected_stats[item_id]['ITEM_MOD_STAMINA_SHORT']} Stamina", "type": 0},
+            ])
+            for field in ("link", "requested_link", "stats_link", "tooltip_link"):
+                self.assertEqual(item[field], receipt["data"]["link"])
+            self.assertIn(receipt["observation_id"], row["related_observation_ids"])
+        catalog_spec = importlib.util.spec_from_file_location("round_trip_catalog", MODULE_PATH.with_name("build_catalog.py"))
+        catalog      = importlib.util.module_from_spec(catalog_spec)
+        catalog_spec.loader.exec_module(catalog)
+        document      = catalog.build_catalog(database, sha256(process.stdout).hexdigest())
+        catalog_rows  = {row["id"]: row for row in document["transactions"] + document["observations"]}
+        catalog_items = {item["nativeId"]: item for item in document["catalog"]["items"]}
+        catalog.validate_catalog(document)
+        for item_id, source in item_metadata.items():
+            item = catalog_items[item_id]
+            self.assertEqual(item["displaySourceId"], source["observation_id"])
+            self.assertEqual(item["display"]["stats"], source["data"]["stats"])
+            self.assertEqual(item["display"]["tooltipLines"], source["data"]["tooltip_lines"])
+            self.assertEqual(item["display"]["iconId"], source["data"]["icon_id"])
+            self.assertEqual({variant["link"] for variant in item["variants"]}, {source["data"]["link"]})
+            self.assertEqual(catalog_rows[source["observation_id"]]["data"], source["data"])
+            self.assertIn(item["key"], {reference["key"] for reference in catalog_rows[source["observation_id"]]["entities"]})
+        self.assertNotIn("stats", catalog_items[123]["display"])
         metadata     = [row["data"] for row in observations if row["kind"] == "talent.metadata"]
         nodes        = {row["entity_id"]: row["info"] for row in metadata if row["entity_type"] == "node"}
         self.assertEqual(set(nodes), {11, 12})
