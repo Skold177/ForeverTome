@@ -20,6 +20,7 @@ FT.Profile = {
     quest_dialogue = known, quest_rewards = known, quest_gossip = known, quest_data_load = known,
     loot_info = known and "modern" or nil, container_info = known and "modern" or nil,
     item_info = known and "modern" or nil, loot_source_pairs = false,
+    spellbook = known and "modern" or nil, talents = known and "traits" or nil,
     capabilities = {
         quests = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         loot_visibility = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
@@ -27,6 +28,8 @@ FT.Profile = {
         units = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         location = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         world = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        spellbook = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        talents = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         loot_source_mapping = { status = "unsupported", enabled = false, reason = "no_validated_contract" },
         combat_death_feed = { status = "restricted", enabled = false, reason = "secure_only_client_api" },
     },

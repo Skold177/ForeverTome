@@ -6,8 +6,6 @@ local offers      = {}
 local lastPlayer
 local lastRoute
 local lastRouteAt = 0
-local spells      = {}
-local spellCount  = 0
 
 local function selectFields(source, fields)
     local result = {}
@@ -163,27 +161,6 @@ local function merchantSnapshot(event)
     end
 end
 
-local function spellMetadata(spellID, related)
-    if spells[spellID] or spellCount >= 2048 then
-        return
-    end
-    local source = FT.Call("C_Spell.GetSpellInfo", spellID)
-    local data   = selectFields(source, {
-        name = "string", iconID = "number", castTime = "number", minRange = "number", maxRange = "number",
-    })
-    if not data.name then
-        return
-    end
-    data.spell_id    = spellID
-    data.description = FT.Value(FT.Call("C_Spell.GetSpellDescription", spellID), "string")
-    local id = FT.Emit("spell.metadata", data, { api = "C_Spell.GetSpellInfo", method = "metadata_read" },
-        "api_snapshot", related and { related } or {})
-    if id then
-        spells[spellID] = true
-        spellCount     = spellCount + 1
-    end
-end
-
 local function professionSnapshot(event)
     local source = FT.Call("C_TradeSkillUI.GetBaseProfessionInfo")
     local data   = selectFields(source, {
@@ -261,16 +238,12 @@ local function recipeLearned(event, recipeID, recipeLevel, baseRecipeID)
     end
 end
 
-FT.OnReset(function(reason)
+FT.OnReset(function()
     sightings  = {}
     merchant   = nil
     offers     = {}
     lastPlayer = nil
     lastRoute  = nil
-    if reason == "user_clear" then
-        spells     = {}
-        spellCount = 0
-    end
 end)
 
 local function enterWorld(event)
@@ -348,7 +321,7 @@ FT.On("UNIT_SPELLCAST_SUCCEEDED", function(event, token, _, spellID)
     spellID = FT.Value(spellID, "number")
     if token == "player" and spellID and spellID > 0 then
         local id = FT.Emit("spell.succeeded", { spell_id = spellID, actor = "player", target = FT.Unit("target") }, event, "direct_event")
-        spellMetadata(spellID, id)
+        FT.RequestSpell(spellID, id)
     end
 end)
 

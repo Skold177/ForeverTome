@@ -33,12 +33,17 @@ ARRAY_FIELDS = frozenset({
     "rewards", "choices", "required_items", "available_quests", "active_quests",
     "options", "sources", "items", "reagents", "recipes", "costs",
     "currencies", "reward_items", "choice_items", "source_pairs", "spells",
-    "reagent_slots", "links", "collectors",
+    "reagent_slots", "links", "collectors", "skill_lines", "entries", "flyout_slots",
+    "added_spell_ids", "removed_spell_ids", "power_costs", "treeIDs", "nodeIDs", "entryIDs",
+    "entryIDsWithCommittedRanks", "visibleEdges", "groupIDs", "conditionIDs", "gates",
+    "subTreeSelectionNodeIDs", "tree_hash", "tree_ids", "nodes", "entry_rank_increases", "committed_entry_ids",
 })
 SUPPORTED_KINDS = frozenset({
     "session.started", "session.ended", "coverage.gap", "player.snapshot", "player.state",
     "unit.sighting", "world.context", "world.transition", "location.sample",
     "merchant.opened", "merchant.offer", "merchant.closed", "spell.metadata", "spell.succeeded",
+    "spell.metadata_unavailable", "spell.learned", "spellbook.snapshot", "spellbook.scan", "spellbook.changed",
+    "talent.metadata", "talent.rank", "talent.build", "talent.snapshot",
     "profession.snapshot", "recipe.learned", "recipe.metadata", "craft.result",
     "quest.baseline", "quest.metadata_unavailable", "quest.snapshot", "quest.objective_delta",
     "quest.ready", "quest.log_scope", "quest.dialogue", "quest.accepted", "quest.turned_in",
@@ -267,12 +272,16 @@ def numeric(value, minimum: float = 0) -> bool:
     return type(value) in (int, float) and math.isfinite(value) and value >= minimum
 
 
-def validate_payload_shapes(value):
+def validate_payload_shapes(value, field: str = ""):
+    if field == "missing_fields":
+        require(isinstance(value, dict) and all(isinstance(reason, str) for reason in value.values()),
+                "Invalid nested missing-field reason")
+        return
     if isinstance(value, dict):
         for key, child in value.items():
             if key in ARRAY_FIELDS:
                 require(isinstance(child, list), f"Invalid array field {key}")
-            validate_payload_shapes(child)
+            validate_payload_shapes(child, key)
     elif isinstance(value, list):
         for child in value:
             validate_payload_shapes(child)

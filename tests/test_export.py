@@ -174,6 +174,50 @@ class SavedVariablesTests(unittest.TestCase):
         source = source.replace('["adapter_id"] = "forever-beta-69893-source-v1"', 'adapter_id = [=[forever-beta-69893-source-v1]=]')
         self.assertEqual(export.parse_saved_variables(source)["record_count"], 2)
 
+    def test_catalog_arrays_preserve_empty_and_unavailable_shapes(self):
+        source = FIXTURE.replace('"quest.dialogue"', '"talent.metadata"', 1)
+        source = source.replace('["choices"] = {}', '''["choices"] = {},
+            ["entity_type"] = "node", ["entity_id"] = 7,
+            ["entryIDs"] = { 11, 12 }, ["visibleEdges"] = {},
+            ["conditionIDs"] = {}, ["groupIDs"] = {},
+            ["entryIDsWithCommittedRanks"] = {}, ["costs"] = {},
+            ["subTreeSelectionNodeIDs"] = {}, ["tree_hash"] = {},
+            ["info_status"] = "available"''', 1)
+        database = export.parse_saved_variables(source)
+        node     = database["sessions"][0]["observations"][0]["data"]
+        self.assertEqual(node["entryIDs"], [11, 12])
+        for field in ("visibleEdges", "conditionIDs", "groupIDs", "entryIDsWithCommittedRanks",
+                      "costs", "subTreeSelectionNodeIDs", "tree_hash"):
+            self.assertEqual(node[field], [], field)
+        self.assertNotIn("nodeIDs", node)
+        unavailable = FIXTURE.replace('"quest.dialogue"', '"spellbook.scan"', 1)
+        unavailable = unavailable.replace('["choices"] = {}', '["choices"] = {}, ["completeness"] = "unavailable"', 1)
+        scan        = export.parse_saved_variables(unavailable)["sessions"][0]["observations"][0]["data"]
+        self.assertEqual(scan["completeness"], "unavailable")
+        self.assertNotIn("entries", scan)
+        self.assertNotIn("skill_lines", scan)
+
+    def test_nested_missing_reasons_do_not_become_catalog_arrays(self):
+        source = FIXTURE.replace('"quest.dialogue"', '"spellbook.snapshot"', 1)
+        source = source.replace('["choices"] = {}', '''["choices"] = {}, ["entries"] = {
+            { ["item_type"] = "Flyout", ["missing_fields"] = {
+                ["flyout_slots"] = "not_ready_or_unsupported" } } }''', 1)
+        database = export.parse_saved_variables(source)
+        entry    = database["sessions"][0]["observations"][0]["data"]["entries"][0]
+        self.assertNotIn("flyout_slots", entry)
+        self.assertEqual(entry["missing_fields"], {"flyout_slots": "not_ready_or_unsupported"})
+        for malformed in ('false', '{}', '{ "invalid" }'):
+            with self.subTest(malformed=malformed), self.assertRaises(export.ExportError):
+                export.parse_saved_variables(source.replace('"not_ready_or_unsupported"', malformed))
+
+    def test_catalog_rejects_sparse_and_mixed_array_shapes(self):
+        for field in ("treeIDs", "nodeIDs", "entryIDs", "visibleEdges", "nodes", "skill_lines",
+                      "entries", "flyout_slots", "power_costs", "added_spell_ids", "removed_spell_ids"):
+            for value in ('{ [2] = 12 }', '{ [1] = 12, status = "unavailable" }', 'false'):
+                with self.subTest(field=field, value=value), self.assertRaises(export.ExportError):
+                    source = FIXTURE.replace('["choices"] = {}', f'["choices"] = {{}}, ["{field}"] = {value}', 1)
+                    export.parse_saved_variables(source)
+
     def test_cli_json_and_jsonl_preserve_source_and_original_data(self):
         with tempfile.TemporaryDirectory() as directory:
             root   = Path(directory)
@@ -223,13 +267,121 @@ class SavedVariablesTests(unittest.TestCase):
         script = r'''
 local Host = dofile("tests/support/host.lua")
 local h    = Host.new()
+local e    = h.env
+e.Enum = {
+    SpellBookSpellBank = { Player = 0, Pet = 1 },
+    SpellBookItemType = { Spell = 1, FutureSpell = 2, PetAction = 3, Flyout = 4 },
+}
+e.C_SpellBook = {}
+e.C_SpellBook.GetNumSpellBookSkillLines = function()
+    return 1
+end
+e.C_SpellBook.GetSpellBookSkillLineInfo = function()
+    return { name = "Synthetic spell category", iconID = 10, itemIndexOffset = 0,
+        numSpellBookItems = 2, isGuild = false, shouldHide = false }
+end
+e.C_SpellBook.GetSpellBookItemInfo = function(slot, bank)
+    assert(bank == 0)
+    return { actionID = 1000 + slot, spellID = 1000 + slot, itemType = slot,
+        isPassive = slot == 1, isOffSpec = false, name = "Spell " .. slot,
+        subName = "Synthetic rank", iconID = 10 + slot, skillLineIndex = 1 }
+end
+e.C_SpellBook.IsSpellKnown = function(spellID)
+    return spellID == 1001
+end
+e.C_SpellBook.GetSpellBookItemLevelLearned = function(slot)
+    return slot == 1 and 1 or 60
+end
+e.C_SpellBook.HasPetSpells = function()
+    return 0, "PET"
+end
+e.HasPetSpells = e.C_SpellBook.HasPetSpells
+e.C_Spell.GetSpellInfo = function(spellID)
+    return { spellID = spellID, name = "Spell " .. spellID, iconID = 10,
+        originalIconID = 11, castTime = 0, minRange = 0, maxRange = 40 }
+end
+e.C_Spell.GetSpellDescription = function(spellID)
+    return "Spell description " .. spellID
+end
+e.C_Spell.GetSpellPowerCost = function()
+    return {}
+end
+e.C_Spell.GetSpellCooldown = function()
+    return { startTime = 0, duration = 0, isEnabled = true, modRate = 1 }
+end
+e.C_Spell.IsSpellDataCached = function()
+    return true
+end
+e.C_Spell.IsSpellPassive = function(spellID)
+    return spellID == 1001
+end
+e.C_ClassTalents = {}
+e.C_ClassTalents.GetActiveConfigID = function()
+    return 7
+end
+e.C_Traits = {}
+e.C_Traits.GetConfigInfo = function()
+    return { ID = 7, type = 1, treeIDs = { 9 }, name = "PRIVATE_LOADOUT_NAME",
+        usesSharedActionBars = false, characterName = "PRIVATE_CHARACTER_NAME" }
+end
+e.C_Traits.ConfigHasStagedChanges = function()
+    return false
+end
+e.C_Traits.GetTreeInfo = function()
+    return { ID = 9, gates = {}, rootNodeID = 11, hideSingleRankNumbers = false,
+        cannotRefund = false, uiTextureKit = "synthetic", titleText = "Synthetic talents" }
+end
+e.C_Traits.GetTreeHash = function()
+    return { 0, 1, 255 }
+end
+e.C_Traits.GetTreeNodes = function()
+    return { 11, 12 }
+end
+e.C_Traits.GetTreeCurrencyInfo = function()
+    return {}
+end
+e.C_Traits.GetGroupDisplayInfoByTreeID = function()
+    return {}
+end
+e.C_Traits.GetNodeInfo = function(_, nodeID)
+    local selected = nodeID == 11
+    local entryID  = nodeID + 90
+    return { ID = nodeID, posX = 100, posY = nodeID * 10, type = 0, flags = 0,
+        entryIDs = { entryID }, entryIDsWithCommittedRanks = selected and { entryID } or {},
+        activeEntry = selected and { entryID = entryID, rank = 1 } or nil,
+        nextEntry = { entryID = entryID, rank = selected and 2 or 1 },
+        currentRank = selected and 1 or 0, activeRank = selected and 1 or 0,
+        ranksPurchased = selected and 1 or 0, ranksIncreased = 0, maxRanks = 2, totalMaxRanks = 2,
+        entryIDToRanksIncreased = { [entryID] = 0 },
+        canPurchaseRank = true, canRefundRank = selected, isAvailable = true, isVisible = true,
+        isDisplayError = false, meetsEdgeRequirements = true, isCascadeRepurchasable = false,
+        visibleEdges = selected and { { targetNode = 12, type = 1, visualStyle = 0, isActive = true } } or {},
+        groupIDs = {}, conditionIDs = {} }
+end
+e.C_Traits.GetNodeCost = function()
+    return {}
+end
+e.C_Traits.GetEntryInfo = function(_, entryID)
+    return { definitionID = entryID + 100, type = 0, maxRanks = 2,
+        isAvailable = true, isDisplayError = false, conditionIDs = {} }
+end
+e.C_Traits.GetDefinitionInfo = function(definitionID)
+    return { spellID = definitionID + 800, overrideName = "Synthetic talent " .. definitionID }
+end
+e.C_Traits.GetTraitDescription = function(entryID, rank)
+    return "Talent " .. entryID .. " rank " .. rank
+end
 h:start()
+h.env.SlashCmdList.FOREVERTOME("dump")
+h:advance(5)
+h:assertHealthy()
 h.FT.Emit("item.metadata", { item_id = 123, name = "Caf\195\169", description = "First\nSecond" }, "ITEM_DATA_LOAD_RESULT")
 h:event("PLAYER_LOGOUT")
 local saved = assert(h.FT.Export())
 saved.synthetic = true
 local restored = Host.new(saved)
 restored:start()
+restored:advance(1)
 restored:assertHealthy()
 local database = assert(restored.FT.Export())
 local function serialize(value)
@@ -257,13 +409,70 @@ io.write("ForeverTomeDB = " .. serialize(database))
         self.assertTrue(database["synthetic"])
         original = next(row for row in database["sessions"][0]["observations"] if row["kind"] == "item.metadata")
         self.assertEqual(original["data"], {"item_id": 123, "name": "Café", "description": "First\nSecond"})
+        observations = database["sessions"][0]["observations"]
+        metadata     = [row["data"] for row in observations if row["kind"] == "talent.metadata"]
+        nodes        = {row["entity_id"]: row["info"] for row in metadata if row["entity_type"] == "node"}
+        self.assertEqual(set(nodes), {11, 12})
+        self.assertEqual(nodes[11]["visibleEdges"][0]["targetNode"], 12)
+        self.assertEqual(nodes[12]["visibleEdges"], [])
+        self.assertEqual(nodes[12]["currentRank"], 0)
+        self.assertEqual(nodes[12]["entryIDs"], [102])
+        self.assertEqual(nodes[12]["entryIDsWithCommittedRanks"], [])
+        self.assertEqual(nodes[12]["entry_rank_increases"], [{"entry_id": 102, "ranks_increased": 0}])
+        self.assertEqual(nodes[12]["conditionIDs"], [])
+        self.assertEqual(nodes[12]["costs"], [])
+        definitions = {row["entity_id"]: row["info"] for row in metadata if row["entity_type"] == "definition"}
+        self.assertEqual(definitions[202]["spellID"], 1002)
+        ranks = {(row["data"]["entry_id"], row["data"]["rank"]): row["data"]["description"]
+                 for row in observations if row["kind"] == "talent.rank"}
+        self.assertEqual(ranks[102, 2], "Talent 102 rank 2")
+        snapshots = [row["data"] for row in observations if row["kind"] == "talent.snapshot"]
+        self.assertTrue(any(row["tree_ids"] == [9] and row["node_count"] == 2
+                            and row["completeness"] == "complete" for row in snapshots))
+        spellbook = [row["data"] for row in observations if row["kind"] == "spellbook.snapshot"]
+        player    = next(row for row in spellbook if row["bank"] == "player")
+        pet       = next(row for row in spellbook if row["bank"] == "pet")
+        entries   = {row["spellID"]: row for row in player["entries"]}
+        self.assertEqual(player["skill_lines"][0]["name"], "Synthetic spell category")
+        self.assertTrue(entries[1001]["isPassive"])
+        self.assertTrue(entries[1001]["is_known"])
+        self.assertEqual(entries[1002]["item_type"], "FutureSpell")
+        self.assertFalse(entries[1002]["is_known"])
+        self.assertEqual(entries[1002]["levelLearned"], 60)
+        self.assertEqual(pet["entries"], [])
+        spells = {row["data"]["spell_id"]: row["data"] for row in observations if row["kind"] == "spell.metadata"}
+        self.assertTrue(spells[1001]["is_passive"])
+        self.assertEqual(spells[1002]["description"], "Spell description 1002")
+        self.assertEqual(spells[1002]["current_state"]["power_costs"], [])
+        self.assertEqual(spells[1002]["current_state"]["cooldown"]["duration"], 0)
+        restored      = database["sessions"][1]["observations"]
+        unknown_tree  = next(row for row in restored if row["kind"] == "talent.snapshot")
+        unknown_books = [row["data"] for row in restored if row["kind"] == "spellbook.snapshot"]
+        self.assertNotIn("tree_ids", unknown_tree["data"])
+        self.assertNotIn("expected_node_count", unknown_tree["data"])
+        self.assertIn("data.config_id", unknown_tree["missing_fields"])
+        self.assertEqual({row["bank"] for row in unknown_books}, {"player", "pet"})
+        for book in unknown_books:
+            self.assertEqual(book["bank_status"], "unavailable")
+            self.assertNotIn("entries", book)
+            self.assertNotIn("skill_lines", book)
+        self.assertNotIn("PRIVATE_LOADOUT_NAME", export.canonical(database))
+        self.assertNotIn("PRIVATE_CHARACTER_NAME", export.canonical(database))
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "runtime.sqlite"
             output      = Path(directory) / "runtime.json"
+            lines       = Path(directory) / "runtime.jsonl"
             export.write_export(database, output, "json", "synthetic")
+            export.write_export(database, lines, "jsonl", "synthetic")
             self.assertEqual(json.loads(output.read_text(encoding="utf-8")), database)
+            observations = [row for session in database["sessions"] for row in session["observations"]]
+            records      = [json.loads(line) for line in lines.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([row["observation"] for row in records if row["type"] == "observation"], observations)
             self.assertEqual(export.import_sqlite(database, destination), database["record_count"])
             self.assertEqual(export.import_sqlite(database, destination), 0)
+            with closing(sqlite3.connect(destination)) as connection:
+                rows = connection.execute("SELECT record_json FROM ft_observations ORDER BY session_id, sequence").fetchall()
+                self.assertEqual([json.loads(row[0]) for row in rows], observations)
 
 
 if __name__ == "__main__":

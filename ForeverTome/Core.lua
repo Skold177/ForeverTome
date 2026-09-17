@@ -1,6 +1,6 @@
 local _, FT = ...
 
-FT.VERSION = "0.1.0"
+FT.VERSION = "0.2.0"
 FT.SCHEMA  = 1
 FT.LIMITS  = {
     records = 60000, bytes = 48 * 1024 * 1024, sessions = 512,
@@ -9,11 +9,14 @@ FT.LIMITS  = {
     session_bytes = 32768,
 }
 
-local recordKinds = {}
+local recordKinds      = {}
+local internalCaptures = { FT_BASELINE = "baseline_refresh", FT_CATALOG = "manual_catalog" }
 for kind in string.gmatch([[
 session.started session.ended coverage.gap player.snapshot player.state unit.sighting
 world.context world.transition location.sample merchant.opened merchant.offer merchant.closed
 spell.metadata spell.succeeded profession.snapshot recipe.learned recipe.metadata craft.result
+spell.metadata_unavailable spell.learned spellbook.snapshot spellbook.scan spellbook.changed
+talent.metadata talent.rank talent.build talent.snapshot
 quest.baseline quest.metadata_unavailable quest.snapshot quest.objective_delta quest.ready
 quest.log_scope quest.dialogue quest.accepted quest.turned_in quest.removed quest.metadata
 interaction.snapshot item.metadata_unresolved item.metadata item.received loot.visible loot.opened
@@ -353,12 +356,13 @@ function FT.Emit(kind, data, capture, evidence, related, missing)
         FT.Diagnostic("invalid_record", "kind")
         return nil
     end
-    if capture == "FT_BASELINE" then
-        capture = { method = "baseline_refresh" }
-    elseif type(capture) == "table" and capture.event == "FT_BASELINE" then
+    if type(capture) == "string" and internalCaptures[capture] then
+        capture = { method = internalCaptures[capture] }
+    elseif type(capture) == "table" and internalCaptures[capture.event] then
+        local method = internalCaptures[capture.event]
         capture = FT.Copy(capture)
         capture.event  = nil
-        capture.method = "baseline_refresh"
+        capture.method = method
     end
     local elapsed = FT.Now()
     local record  = {

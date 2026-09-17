@@ -27,6 +27,8 @@ The API paths below are relative to that extraction's `raw/interface/addons/` di
 | Bags/items | `containerdocumentation.lua`, `itemdocumentation.lua` in the generated API directory | `C_Container` structured item results; `C_Item.GetItemInfo` and `GetItemInfoInstant` |
 | Position | Generated `mapdocumentation.lua` | `C_Map.GetBestMapForUnit` and `GetPlayerMapPosition` explicitly cover player/party; stored coordinates belong to the observer |
 | Units | Generated `unitdocumentation.lua` | `UnitGUID` and `UnitName` can return secret identity values; check readability before inspecting fields |
+| Spells | Generated `spellbookdocumentation.lua`, `spelldocumentation.lua`; Camelot uses the mainline spellbook | Read player/pet skill lines and entries, passive/future spells, flyouts, metadata and current character state; [spell contract](implementation-spells.md) |
+| Talents | Generated `classtalentsdocumentation.lua`, `sharedtraitsdocumentation.lua` | Read the active config and accessible class trees through `C_ClassTalents`/`C_Traits`; [talent contract](implementation-talents.md) |
 | Combat | Generated `combatlogsecuredocumentation.lua`: `C_CombatLogSecure` is `SecureOnly`; `combatlogdocumentation.lua` marks unfiltered event restricted | Direct combat-log/death capture remains disabled |
 | Loot sources | No declaration or UI usage for `GetLootSourceInfo` found in this extraction | Source-pair decoding remains disabled; targeted creatures are not promoted to drop sources |
 

@@ -13,7 +13,7 @@ SPEC.loader.exec_module(package)
 class PackageTests(unittest.TestCase):
     def test_distribution_contains_only_runtime_and_documentation(self):
         files    = package.addon_files()
-        expected = {"ForeverTome.toc", "Core.lua", "Compatibility.lua", "Quests.lua", "Loot.lua", "World.lua", "Bootstrap.lua", "README.md", "LICENSE"}
+        expected = {"ForeverTome.toc", "Core.lua", "Compatibility.lua", "Quests.lua", "Loot.lua", "Spells.lua", "Talents.lua", "World.lua", "Bootstrap.lua", "README.md", "LICENSE"}
         self.assertEqual(set(files), expected)
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "addon.zip"

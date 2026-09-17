@@ -1,4 +1,45 @@
 return {
+    { name = "manual catalogs preserve timing without fabricating a client event", run = function(Host)
+        local h = Host.new()
+        h:start()
+        local trigger = h.FT.Now()
+        h.FT.Emit("spellbook.scan", {}, "FT_CATALOG")
+        assert(h:last("spellbook.scan").capture.method == "manual_catalog")
+        h:advance(0.2)
+        h.FT.Emit("talent.snapshot", {}, { event = "FT_CATALOG", trigger_elapsed_s = trigger, sampled_elapsed_s = h.FT.Now() })
+        local capture = h:last("talent.snapshot").capture
+        assert(capture.event == nil and capture.method == "manual_catalog")
+        assert(capture.trigger_elapsed_s == trigger and capture.sampled_elapsed_s > trigger)
+        h:assertHealthy()
+    end },
+    { name = "dump command respects recording state and client support", run = function(Host)
+        local h     = Host.new()
+        local calls = 0
+        h.FT.On("FT_CATALOG", function()
+            calls = calls + 1
+        end)
+        h.env.SlashCmdList.FOREVERTOME("dump")
+        assert(calls == 0)
+        h:start()
+        h.env.SlashCmdList.FOREVERTOME("dump")
+        assert(calls == 1)
+        h.FT.Pause(true)
+        h.env.SlashCmdList.FOREVERTOME("dump")
+        assert(calls == 1)
+        h.FT.Pause(false)
+        h.FT.InWorld = false
+        h.env.SlashCmdList.FOREVERTOME("dump")
+        assert(calls == 1)
+        h.FT.InWorld = true
+        h.FT.Profile.supported = false
+        h.env.SlashCmdList.FOREVERTOME("dump")
+        assert(calls == 1)
+        h.FT.Profile.supported = true
+        h.FT.Blocked = "capacity_limit"
+        h.env.SlashCmdList.FOREVERTOME("dump")
+        assert(calls == 1)
+        h:assertHealthy()
+    end },
     { name = "capture and export independently own nested observations", run = function(Host)
         local h = Host.new()
         h:start()

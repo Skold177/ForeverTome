@@ -98,6 +98,7 @@ return {
         end
         h:start()
         h:event("UNIT_SPELLCAST_SUCCEEDED", "player", "private-cast-guid", 1234)
+        h:advance(0.2)
         local record = h:last("spell.succeeded")
         assert(record.data.spell_id == 1234 and record.data.cast_guid == nil)
         assert(h:last("spell.metadata").related_observation_ids[1] == record.observation_id)
@@ -111,9 +112,11 @@ return {
         end
         h:start()
         h:event("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", 123)
+        h:advance(0.2)
         assert(#h:records("spell.metadata") == 1)
         assert(h.FT.Clear())
         h:event("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", 123)
+        h:advance(0.2)
         assert(#h:records("spell.metadata") == 1)
         h:assertHealthy()
     end },

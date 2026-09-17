@@ -1,6 +1,6 @@
 # Recorder implementation contract — schema 1
 
-This describes the runnable 0.1.0 addon. The original handbook, examples, acquisition backlog, and testing matrix remain research/plans; their unverified capabilities have not become runtime guarantees. The implementation uses the installed Forever Beta 1.60.1.69893 source profile, not the earlier Retail/Titan profiles.
+This describes the runnable 0.2.0 addon. The original handbook, examples, acquisition backlog, and testing matrix remain research/plans; their unverified capabilities have not become runtime guarantees. The implementation uses the installed Forever Beta 1.60.1.69893 source profile, not the earlier Retail/Titan profiles.
 
 ## Saved data
 
@@ -19,7 +19,7 @@ Missing values are omitted, with reasons where the collector can identify them. 
 - At most 128 deferred tasks; four execute per 0.1-second update. Quest/inventory invalidations coalesce. Critical loot/dialogue snapshots are taken synchronously while visible.
 - Loot: 200 slots, carried bags 0–4/1,000 slots total. Item metadata: 256 pending variants, 64 references per request, 15-second timeout. Quest limits are in the [quest contract](implementation-quests.md).
 - Creature sightings throttle unchanged GUID/dead state for a token to once per ten seconds. Route checks occur every five seconds, recording movement of at least 0.002 normalized combined coordinate distance, map/status changes, or a 60-second heartbeat.
-- Vendors: 250 offers/16 costs. Recipe schematics: 32 reagent slots/16 alternatives per slot. Cached spell metadata: 2,048 distinct IDs per recording history.
+- Vendors: 250 offers/16 costs. Recipe schematics: 32 reagent slots/16 alternatives per slot. Spell and talent catalogs use bounded workers/chunks; see the [spell contract](implementation-spells.md) and [talent contract](implementation-talents.md) for their limits and API evidence.
 
 At capacity recording stops visibly without evicting history. Diagnostics persist outside the main record budget. Pausing, unavailable snapshots, transitions, and errors invalidate comparisons so gaps do not become invented progress. Metadata timeouts retain original observations and report unresolved information.
 
@@ -36,6 +36,10 @@ Each kind's fields are selected explicitly by its collector. The kind list and J
 | Item obtained locally | Localized client self-receipt match, separate from inventory deltas/loot slots |
 | Vendor sells item | Offer, readable NPC context, prices/stock/costs; no purchase inferred |
 | Craft produced output | Client result fields; absent recipe association remains unknown |
+| Character has a spell | Readable spellbook entry with known/future/passive/override state; a spellbook difference does not become a learned event |
+| Talent connects to another node | Readable tree edges, choice IDs, conditions, costs, and layout; selection state is separate from the tree definition |
+
+`/ft dump` requests fresh spellbook and talent scans. `/ft status` shows pending reads and the last scan's completeness. Save with `/reload` after work settles. The new kinds extend schema 1 and retain older observations. Metadata is keyed by content IDs within the existing client/build scope; spell costs/cooldowns describe the character at sampling time, not immutable base values. Collection reads the current character's accessible data without changing specialization, talents, loadouts, or the spellbook UI.
 
 Do not turn a reward panel into a turn-in, a disappearing nameplate into a death, a dead target into kill credit, or a reopened loot window into another drop. Product/build scope applies to content IDs. Website rendering must escape names/text/hyperlinks.
 
