@@ -318,21 +318,28 @@ function FT.Tick()
         return
     end
     local now   = FT.Now()
-    local count = 0
+    local ready = {}
     for key, task in pairs(scheduled) do
         if task.at <= now then
-            scheduled[key] = nil
-            if task.generation == generation then
-                local ok = pcall(task.callback)
-                if not ok then
-                    FT.Diagnostic("collector_error", key)
-                    FT.ResetCollectors("collector_error")
-                    return
-                end
-            end
-            count = count + 1
-            if count >= 4 then
+            ready[#ready + 1] = { key = key, task = task }
+            if #ready >= 4 then
                 break
+            end
+        end
+    end
+    for _, entry in ipairs(ready) do
+        if FT.Blocked or database.settings.paused then
+            return
+        end
+        local key  = entry.key
+        local task = entry.task
+        if scheduled[key] == task and task.generation == generation then
+            scheduled[key] = nil
+            local ok = pcall(task.callback)
+            if not ok then
+                FT.Diagnostic("collector_error", key)
+                FT.ResetCollectors("collector_error")
+                return
             end
         end
     end

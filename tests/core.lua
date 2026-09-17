@@ -234,4 +234,71 @@ return {
         assert(not reader.FT.Status().initialized)
         assert(reader.env.ForeverTomeDB == saved)
     end },
+    { name = "scheduler callbacks defer newly queued work until the next tick", run = function(Host)
+        local h = Host.new()
+        h:start()
+        h.FT.ResetCollectors("test_boundary")
+        local calls = {}
+        h.FT.Schedule("parent", 0, function()
+            calls[#calls + 1] = "parent"
+            for index = 1, 16 do
+                local name = "child" .. index
+                h.FT.Schedule(name, 0, function()
+                    calls[#calls + 1] = name
+                end)
+            end
+        end)
+        h.FT.Tick()
+        h:assertEqual(calls, { "parent" })
+        for tick = 1, 4 do
+            h.FT.Tick()
+            h:assertEqual(#calls, 1 + tick * 4)
+        end
+        h.FT.Tick()
+        h:assertEqual(#calls, 17)
+        h:assertHealthy()
+    end },
+    { name = "scheduler reset invalidates the rest of an already selected batch", run = function(Host)
+        local h = Host.new()
+        h:start()
+        h.FT.ResetCollectors("test_boundary")
+        local previous = 0
+        local fresh    = 0
+        for index = 1, 4 do
+            h.FT.Schedule("original" .. index, 0, function()
+                previous = previous + 1
+                h.FT.ResetCollectors("test_boundary")
+                h.FT.Schedule("fresh", 0, function()
+                    fresh = fresh + 1
+                end)
+            end)
+        end
+        h.FT.Tick()
+        h:assertEqual(previous, 1)
+        h:assertEqual(fresh, 0)
+        h.FT.Tick()
+        h:assertEqual(previous, 1)
+        h:assertEqual(fresh, 1)
+        h:assertHealthy()
+    end },
+    { name = "a callback can safely reschedule its own key once per tick", run = function(Host)
+        local h = Host.new()
+        h:start()
+        h.FT.ResetCollectors("test_boundary")
+        local count = 0
+        local function repeatTask()
+            count = count + 1
+            if count < 8 then
+                h.FT.Schedule("repeat", 0, repeatTask)
+            end
+        end
+        h.FT.Schedule("repeat", 0, repeatTask)
+        for tick = 1, 8 do
+            h.FT.Tick()
+            h:assertEqual(count, tick)
+        end
+        h.FT.Tick()
+        h:assertEqual(count, 8)
+        h:assertHealthy()
+    end },
 }
