@@ -49,7 +49,207 @@ local function Progress(state, value, creature)
     state.objectives[1].text         = (creature or "Wolves") .. " slain: " .. value .. "/5"
 end
 
+local function DialogueFixture(host, state)
+    state.dialogueQuestID = 501
+    state.npcID          = 7001
+    host.env.GetQuestID = function()
+        return state.dialogueQuestID
+    end
+    host.env.GetTitleText = function()
+        return state.title
+    end
+    host.env.GetQuestText = function()
+        return "The wolves have returned."
+    end
+    host.env.GetObjectiveText = function()
+        return "Defeat five wolves."
+    end
+    host.env.UnitGUID = function(token)
+        if token == "npc" and state.npcID then
+            return "Creature-0-1-2-3-" .. state.npcID .. "-000001"
+        end
+    end
+    host.env.C_CreatureInfo.GetCreatureID = function()
+        return state.npcID
+    end
+    host.env.UnitName = function()
+        return "Quest giver"
+    end
+end
+
 return {
+    {
+        name = "quests: acceptance links an open offer without treating it as historical NPC data",
+        run = function(Host)
+            local host, state = Fixture(Host, true)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_DETAIL")
+            local offer = host:last("quest.dialogue")
+            host:advance(3)
+            host:event("QUEST_ACCEPTED", 501)
+            host:event("QUEST_FINISHED")
+            local accepted = host:last("quest.accepted")
+            host:assertEqual(accepted.data.npc.creature_id, 7001)
+            host:assertEqual(accepted.data.dialogue_npc, nil)
+            host:assertEqual(accepted.data.interaction_id, offer.data.interaction_id)
+            host:assertEqual(accepted.related_observation_ids[1], offer.observation_id)
+            host:assertEqual(accepted.evidence.method, "direct_event")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: closing dialogue before acceptance retains explicitly historical giver context",
+        run = function(Host)
+            for _, closing in ipairs({ "QUEST_FINISHED", "GOSSIP_CLOSED" }) do
+                local host, state = Fixture(Host, true)
+                DialogueFixture(host, state)
+                host:start()
+                host:event("QUEST_DETAIL")
+                local offer = host:last("quest.dialogue")
+                host:advance(3)
+                host:event(closing, false)
+                state.npcID = nil
+                host:advance(0.5)
+                host:event("QUEST_ACCEPTED", 501)
+                local accepted = host:last("quest.accepted")
+                host:assertEqual(accepted.data.npc, nil)
+                host:assertEqual(accepted.missing_fields.npc, "unknown_source")
+                host:assertEqual(accepted.data.dialogue_npc.creature_id, 7001)
+                host:assertEqual(accepted.data.interaction_id, offer.data.interaction_id)
+                host:assertEqual(accepted.related_observation_ids[1], offer.observation_id)
+                host:assertEqual(offer.data.npc.creature_id, 7001)
+                host:event("QUEST_ACCEPTED", 501)
+                host:assertEqual(host:last("quest.accepted").data.dialogue_npc, nil)
+                host:assertEqual(#host:last("quest.accepted").related_observation_ids, 0)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "quests: repeated close notifications cannot extend canceled offer expiry",
+        run = function(Host)
+            local host, state = Fixture(Host, true)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_DETAIL")
+            host:event("QUEST_FINISHED")
+            state.npcID = nil
+            host:advance(1.5)
+            host:event("GOSSIP_CLOSED", false)
+            host:advance(1)
+            host:event("QUEST_ACCEPTED", 501)
+            local accepted = host:last("quest.accepted")
+            host:assertEqual(accepted.data.dialogue_npc, nil)
+            host:assertEqual(accepted.data.interaction_id, nil)
+            host:assertEqual(#accepted.related_observation_ids, 0)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: unrelated quests and newer interactions cannot inherit an old giver",
+        run = function(Host)
+            for _, nextEvent in ipairs({ "QUEST_DETAIL", "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_ACCEPTED" }) do
+                local host, state = Fixture(Host, true)
+                DialogueFixture(host, state)
+                host:start()
+                host:event("QUEST_DETAIL")
+                host:event("QUEST_FINISHED")
+                state.dialogueQuestID = 502
+                state.npcID          = nil
+                host:event(nextEvent, 502)
+                host:event("QUEST_FINISHED")
+                host:event("QUEST_ACCEPTED", 501)
+                local accepted = host:last("quest.accepted")
+                host:assertEqual(accepted.data.npc, nil)
+                host:assertEqual(accepted.data.dialogue_npc, nil)
+                host:assertEqual(#accepted.related_observation_ids, 0)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "quests: a different live NPC is never paired with the previous dialogue",
+        run = function(Host)
+            local host, state = Fixture(Host, true)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_DETAIL")
+            host:event("QUEST_FINISHED")
+            state.npcID = 7002
+            host:event("QUEST_ACCEPTED", 501)
+            local accepted = host:last("quest.accepted")
+            host:assertEqual(accepted.data.npc.creature_id, 7002)
+            host:assertEqual(accepted.data.dialogue_npc, nil)
+            host:assertEqual(accepted.data.interaction_id, nil)
+            host:assertEqual(#accepted.related_observation_ids, 0)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: turnin after reward closure links both dialogue and removal",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_COMPLETE")
+            local reward = host:last("quest.dialogue")
+            host:event("QUEST_FINISHED")
+            state.npcID = nil
+            host:event("QUEST_REMOVED", 501, false)
+            local removal = host:last("quest.removed")
+            host:event("QUEST_TURNED_IN", 501, 40, 0)
+            local turnin = host:last("quest.turned_in")
+            host:assertEqual(turnin.data.dialogue_npc.creature_id, 7001)
+            host:assertEqual(turnin.data.npc, nil)
+            host:assertEqual(turnin.related_observation_ids[1], removal.observation_id)
+            host:assertEqual(turnin.related_observation_ids[2], reward.observation_id)
+            host:assertEqual(turnin.data.quest_run_id, removal.data.quest_run_id)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: offer and reward dialogue phases cannot substitute for each other",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host:start()
+            host:event("QUEST_DETAIL")
+            host:event("QUEST_FINISHED")
+            state.npcID = nil
+            host:event("QUEST_TURNED_IN", 501, 40, 0)
+            host:assertEqual(#host:last("quest.turned_in").related_observation_ids, 0)
+            host:assertEqual(host:last("quest.turned_in").data.dialogue_npc, nil)
+            state.npcID = 7001
+            host:event("QUEST_COMPLETE")
+            host:event("QUEST_FINISHED")
+            state.npcID = nil
+            host:event("QUEST_ACCEPTED", 501)
+            host:assertEqual(#host:last("quest.accepted").related_observation_ids, 0)
+            host:assertEqual(host:last("quest.accepted").data.dialogue_npc, nil)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: reset boundaries discard dialogue references",
+        run = function(Host)
+            for _, reason in ipairs({ "pause", "world_transition", "collector_error", "user_clear" }) do
+                local host, state = Fixture(Host, true)
+                DialogueFixture(host, state)
+                host:start()
+                host:event("QUEST_DETAIL")
+                host:event("QUEST_FINISHED")
+                state.npcID = nil
+                host.FT.ResetCollectors(reason)
+                host:event("QUEST_ACCEPTED", 501)
+                local accepted = host:last("quest.accepted")
+                host:assertEqual(accepted.data.dialogue_npc, nil)
+                host:assertEqual(accepted.data.interaction_id, nil)
+                host:assertEqual(#accepted.related_observation_ids, 0)
+                host:assertHealthy()
+            end
+        end,
+    },
     {
         name = "quests: login establishes a baseline without inventing acceptance",
         run = function(Host)

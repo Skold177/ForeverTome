@@ -374,6 +374,21 @@ end
 h:start()
 h.env.SlashCmdList.FOREVERTOME("dump")
 h:advance(5)
+e.GetQuestID = function()
+    return 501
+end
+e.UnitGUID = function(token)
+    if token == "npc" then
+        return "Creature-0-1-2-3-7001-000001"
+    end
+end
+e.C_CreatureInfo.GetCreatureID = function()
+    return 7001
+end
+h:event("QUEST_DETAIL")
+h:event("QUEST_FINISHED")
+e.UnitGUID = nil
+h:event("QUEST_ACCEPTED", 501)
 h:assertHealthy()
 h.FT.Emit("item.metadata", { item_id = 123, name = "Caf\195\169", description = "First\nSecond" }, "ITEM_DATA_LOAD_RESULT")
 h:event("PLAYER_LOGOUT")
@@ -410,6 +425,13 @@ io.write("ForeverTomeDB = " .. serialize(database))
         original = next(row for row in database["sessions"][0]["observations"] if row["kind"] == "item.metadata")
         self.assertEqual(original["data"], {"item_id": 123, "name": "Café", "description": "First\nSecond"})
         observations = database["sessions"][0]["observations"]
+        accepted     = next(row for row in observations if row["kind"] == "quest.accepted")
+        dialogue     = next(row for row in observations if row["kind"] == "quest.dialogue")
+        self.assertEqual(accepted["data"]["dialogue_npc"]["creature_id"], 7001)
+        self.assertNotIn("npc", accepted["data"])
+        self.assertEqual(accepted["missing_fields"]["npc"], "unknown_source")
+        self.assertEqual(accepted["related_observation_ids"], [dialogue["observation_id"]])
+        self.assertEqual(accepted["data"]["interaction_id"], dialogue["data"]["interaction_id"])
         metadata     = [row["data"] for row in observations if row["kind"] == "talent.metadata"]
         nodes        = {row["entity_id"]: row["info"] for row in metadata if row["entity_type"] == "node"}
         self.assertEqual(set(nodes), {11, 12})

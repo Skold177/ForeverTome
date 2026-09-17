@@ -4,7 +4,7 @@
 
 ## Capture and identity
 
-An observed `QUEST_ACCEPTED` creates a new `quest_run_id`. A quest first found in the log creates `quest.baseline` with `acceptance = not_observed`. Acceptance of a previously seen quest creates another run. Reset, pause, world-transition and storage-gap boundaries discard transient comparisons; resumed quests obtain fresh baseline runs.
+An observed `QUEST_ACCEPTED` creates a new `quest_run_id`. A quest first found in the log creates `quest.baseline` with `acceptance = not_observed`. Acceptance of a previously seen quest creates another run. Reset, pause, world-transition and storage-gap boundaries discard transient comparisons; resumed quests obtain fresh baseline runs. Ordinary zone/subzone changes preserve active runs, objective comparisons, and pending metadata requests.
 
 `quest.snapshot` contains the quest ID, run ID, title/flags, available log narrative, objective text, objective rows, layout revision, reported readiness and historical completion flag. Log narrative uses the verified `GetQuestLogQuestText(logIndex)` signature without changing the player's selection. Snapshot `complete` describes objective readability, independently of `quest.log_scope.complete`, which describes visible enumeration.
 
@@ -19,6 +19,10 @@ An objective delta requires complete snapshots from the same run with matching r
 ## Dialogue and enrichment
 
 `quest.dialogue` immediately captures readable offer, progress or reward text, NPC context, and offered rewards, choices or required items. The interacting NPC is sampled through `npc`; missing NPC identity stays unknown. Reward choices do not identify the chosen reward or prove receipt. The item collector receives linked metadata requests for observed items.
+
+Acceptance and turn-in link the latest matching offer or reward dialogue through `related_observation_ids` and its `interaction_id`. One retained dialogue survives closure for up to two seconds, is consumed by the next valid acceptance/turn-in, and is replaced by new dialogue, gossip, or greeting activity. Quest ID and dialogue phase must match; a conflicting live NPC blocks the link. Reset boundaries clear it. Reading an open dialogue for longer than two seconds does not expire the context.
+
+The event's `npc` remains a contemporaneous sample. If it is unavailable, `dialogue_npc` can retain the linked dialogue's historical NPC snapshot, while `missing_fields.npc = unknown_source` remains explicit. This is observed offer/reward context, not proof of the acceptance source: canceling an offer and accepting a shared, item-started, or automatic quest can be indistinguishable within the short closure window. Consumers must preserve that distinction rather than promote `dialogue_npc` to a confirmed questgiver.
 
 `interaction.snapshot` records gossip text, available and active quests, and permitted option fields. Quest greetings use the source-verified greeting getters and record their available/active quest IDs. No dialogue option, reward, quest or log selection is changed by the collector.
 

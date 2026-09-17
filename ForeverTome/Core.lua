@@ -1,6 +1,6 @@
 local _, FT = ...
 
-FT.VERSION = "0.2.0"
+FT.VERSION = "0.2.1"
 FT.SCHEMA  = 1
 FT.LIMITS  = {
     records = 60000, bytes = 48 * 1024 * 1024, sessions = 512,

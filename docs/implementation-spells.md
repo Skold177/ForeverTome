@@ -36,7 +36,7 @@ Book reads and metadata reads process at most eight entries/IDs per callback. Ch
 
 Missing text retries at most three times with delayed load requests. Exhaustion emits `spell.metadata_unavailable`; later verified load/text events can enrich previously observed IDs. `/ft dump` also retries unresolved IDs encountered by its spellbook and talent scans. Missing optional APIs do not create collector exceptions or endless retries.
 
-Zone transitions retain successful metadata and pending cast requests with their original evidence. They invalidate membership comparisons and restart interrupted scheduled work. Unchanged book data is reused across subzone changes. Clear, pause, and error recovery cancel pending work and discard stale references.
+Ordinary zone/subzone changes retain active scans, comparisons, successful metadata, and pending requests without restarting catalogs. Leaving the world retains successful metadata and pending cast requests with their original evidence, but invalidates membership comparisons and restarts interrupted scheduled work on re-entry. Clear, pause, and error recovery cancel pending work and discard stale references.
 
 `FT.SpellStatus()` includes both scheduled and active scans, pending metadata count, latest book completeness, entry count, cache count, and dropped metadata requests. Idle work and zero pending reads mean the dump has settled; they do not imply all client data was available. `/reload` or logout is still required to flush SavedVariables, followed by the existing JSON/JSONL exporter and optional SQLite import.
 

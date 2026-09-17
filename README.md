@@ -2,7 +2,7 @@
 
 ForeverTome records gameplay observations for the World of Warcraft: Forever item, creature, quest, spell, and talent database. Play normally; the addon keeps an ordered history with IDs, timestamps, locations, client build, and evidence for external tools to reconstruct later.
 
-**Version 0.2.0 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Offline replay and export tests are implemented; loading, permissions, event timing, performance, and native saving still need validation in game. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
+**Version 0.2.1 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Live saved data confirms quest acceptance, objective progress, turn-in, loot capture, and persistence in this build. The latest dialogue-link and zone-continuity fixes have offline regression coverage and still need an in-game retest. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
 
 ## Install and record
 
@@ -12,7 +12,7 @@ Copy the `ForeverTome` directory into the selected client's `Interface/AddOns` d
 py tools/package.py --install 'D:\World of Warcraft\_classic_beta_'
 ```
 
-This also builds `dist/ForeverTome-0.2.0.zip`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
+This also builds `dist/ForeverTome-0.2.1.zip`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
 
 The TOC interface value `16001` is derived from version 1.60.1 and is **provisional**. Check `/dump GetBuildInfo()` in game. If its fourth result differs, package with `--interface <measured-number>`; changing the manifest does not admit a different client build. [Client evidence](docs/implementation-client.md) explains the distinction.
 

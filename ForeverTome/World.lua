@@ -269,12 +269,11 @@ end)
 
 for _, event in ipairs({ "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA" }) do
     FT.On(event, function(name)
-        FT.ResetCollectors("zone_change")
+        if not FT.InWorld then
+            return
+        end
         worldSnapshot(name)
         FT.Schedule("world.route", 5, routeSample)
-        FT.Schedule("world.baseline", 0.2, function()
-            FT.Dispatch("FT_BASELINE")
-        end)
     end)
 end
 

@@ -63,7 +63,7 @@ def install(files: dict[str, bytes], client: Path) -> Path:
 
 def main(arguments=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "dist" / "ForeverTome-0.2.0.zip")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist" / "ForeverTome-0.2.1.zip")
     parser.add_argument("--install", type=Path, metavar="CLIENT", help="Product directory containing the executable")
     parser.add_argument("--interface", type=int, help="Override the provisional TOC with the measured interface version")
     options = parser.parse_args(arguments)
