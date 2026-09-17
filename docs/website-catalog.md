@@ -18,7 +18,9 @@ Keep real recordings and generated files outside Git or under this repository's 
 
 ## Automatic conversion
 
-Run the watcher outside WoW while playing:
+Open [ForeverTome Exporter](desktop-exporter.md), choose the save and output folder, and click **Start watching** to convert new saves while its window is open. **Stop watching** pauses the checks; closing the window exits after any current conversion finishes. It does not run in the tray or start with Windows.
+
+For scripts, the same conversion is available through a command-line watcher:
 
 ```powershell
 py tools/watch_catalog.py 'D:\World of Warcraft\_classic_beta_\WTF\Account\<account>\SavedVariables\ForeverTome.lua' --output-dir 'C:\Exports\ForeverTome'
