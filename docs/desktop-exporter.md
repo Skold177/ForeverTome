@@ -28,7 +28,7 @@ Exporting reads SavedVariables through the restricted data parser without execut
 
 ## Output files
 
-The destination contains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`, together with the complete `latest.json` and dated full snapshots. Repeated checks skip unchanged saves, and incomplete saves are retried while watching. Existing snapshots remain available after the addon's history is cleared.
+The destination contains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`, together with the complete `latest.json` and dated full snapshots. JSON files use two-space indentation and line breaks for readability. After upgrading the companion, export once to refresh existing category files and `latest.json` even if the saved recording has not changed. Earlier snapshots remain unchanged. Repeated checks skip unchanged saves, and incomplete saves are retried while watching. Existing snapshots remain available after the addon's history is cleared.
 
 Each JSON file is replaced atomically. If another application reads several categories at once, it must check that their `exportId` values match. Unavailable game data remains unavailable; converting a recording does not supply missing item stats, enemy abilities, exact resource-node positions, or confirmed loot sources. See the [catalog format](website-catalog.md) for fields and interpretation limits.
 
@@ -72,6 +72,6 @@ py tools/package_installer.py
 
 The command produces `dist/installer/ForeverTomeSetup.exe` without running the installer. It finds `ISCC.exe` on `PATH` or in the usual Inno Setup 6 installation folders. For an existing compiler in another location, use `--compiler 'C:\BuildTools\Inno Setup 6\ISCC.exe'`. Use `--bundle-dir` and `--output-dir` to select other input and output folders.
 
-The installer script is `installer/ForeverTomeExporter.iss`. Its application version starts at **0.1.0**, separate from the WoW addon's version. It installs only the executable, license, and short readme. Addon discovery and installation run in the visible application after setup, when the user selects **Install / update addon**. No user settings, recordings, or generated catalogs are included in the setup payload.
+The installer script is `installer/ForeverTomeExporter.iss`. Its application version is **0.1.1**, separate from the WoW addon's version. It installs only the executable, license, and short readme. Addon discovery and installation run in the visible application after setup, when the user selects **Install / update addon**. No user settings, recordings, or generated catalogs are included in the setup payload.
 
 The reference compiler is **Inno Setup 6.7.3**, available from the [official download page](https://jrsoftware.org/isdl.php). Compiler setup is a separate developer prerequisite, not an action performed by this repository's build tools. Its per-user installer configuration follows Inno Setup's [privilege settings](https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm); the uninstall script deliberately has no additional file-deletion rules.

@@ -159,9 +159,10 @@ class CatalogWatcher:
             self.digest            = digest
             return None
         document = build_catalog(database, digest)
-        encoded  = (saved.canonical(document) + "\n").encode("utf-8")
+        encoded  = (json.dumps(document, ensure_ascii=False, sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
         identity = (digest, document["exportId"])
-        views    = {category: (saved.canonical(category_catalog(document, category)) + "\n").encode("utf-8")
+        views    = {category: (json.dumps(category_catalog(document, category), ensure_ascii=False,
+                                         sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
                     for category in CATEGORIES}
         stamp    = datetime.fromtimestamp(stat.st_mtime, timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         snapshot = self.output_dir / f"catalog-{stamp}-{document['exportId']}.json"
