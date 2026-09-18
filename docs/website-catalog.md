@@ -99,6 +99,8 @@ Event and observation rows use these fields:
 
 An entity reference associates a data field with a catalog entry. Its role and path preserve how that entity occurred; an association alone does not prove a drop source, quest requirement, or cause of progress.
 
+Generator 0.2.6 retains `loot.provenance` facts on items and identified creatures. These contain per-observation loot-session/slot IDs, source GUIDs and quantities, mapping status/method, and contextual candidates. Validated mapped sources use the `loot_source` entity role; unverified, partial, mismatched, and contextual associations use `loot_candidate`. A base item can have many sources, so provenance belongs to observations rather than a single permanent `looted_from` ID. Item and creature category files retain their shared loot records and related opening/slot evidence. Old recordings without these associations remain unknown; exporting cannot recover an uncaptured source.
+
 ## Interpretation limits
 
 Native quest-item rewards, chat receipts, and inventory gains can describe the same acquisition. Keep their channels separate; summing them would double-count items. Explicit quest reward attribution comes from the native quest reward event. Nearby events and related NPCs do not supply missing attribution.

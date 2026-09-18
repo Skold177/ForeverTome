@@ -44,6 +44,16 @@ Each kind's fields are selected explicitly by its collector. The kind list and J
 
 Do not turn a reward panel into a turn-in, a disappearing nameplate into a death, a dead target into kill credit, or a reopened loot window into another drop. Product/build scope applies to content IDs. Website rendering must escape names/text/hyperlinks.
 
+## Loot source evidence
+
+`loot.visible` links to its `loot.opened` observation and carries `source_candidates`, containing the opening target/mouseover GUIDs and readable creature IDs. These frozen snapshots remain candidates. Known item-container loot omits those creature candidates.
+
+The supported build attempts a guarded `GetLootSourceInfo(slot)` read when the function is available. Its name and usage string exist in the installed executable, although the extracted API documentation does not declare its return tuple. Readable alternating non-player GUID/quantity pairs are retained in `sources`, with `entity_kind` and a `creature_id` for Creature/Vehicle sources. Every source in an area-loot slot is preserved. `source_method` identifies the API and `source_mapping_status: unverified` records the unvalidated tuple contract. A complete candidate tuple uses `source_status: unverified`; malformed or quantity-mismatched results remain `partial`, and unavailable sources remain `unknown`. No target is substituted into `sources`.
+
+Ordinary local loot receipts can link to one matching slot by exact item link and available quantity. They retain `loot_session_id`, `loot_slot`, `loot_revision`, `loot_match_status: candidate`, source candidates, and the slot observation reference. Receipt source status remains `unknown`: matching a chat receipt to a window is contextual evidence. Created/pushed awards, ambiguous slots, different item variants, and exhausted quantities receive no such link. A closed window stays eligible for two seconds to cover delayed receipt events; a new window, reset, or world transition discards it. These fields are additive to schema 1 and do not rewrite earlier records.
+
+Same-item slot revisions link to their preceding visibility observation. Receipt capacity retains the original quantity plus observed increases, less receipts already linked, so delayed messages can still refer back to supporting quantities after a slot decreases or clears. Metadata-only revisions do not replenish that capacity.
+
 ## Item stats and tooltips
 
 Version 0.2.3 extends `item.metadata` with readable `C_Item.GetItemStats` values and `C_TooltipInfo.GetHyperlink` lines. Both APIs are gated to the supported client profile and are called without changing the visible tooltip UI. Existing item metadata, including `icon_id` or `icon_path`, remains available even when the additional reads fail.

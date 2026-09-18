@@ -57,6 +57,38 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual({path.name: path.read_bytes() for path in self.output_dir.glob("*.json")}, files)
         self.assertEqual(self.source.read_bytes(), self.raw)
 
+    def test_loot_links_survive_category_exports_and_subsequent_recording_clears(self):
+        candidate = {"creature_id": 300, "guid": "Creature-0-1-2-3-300-000001", "reaction": 2}
+        session   = make_session(1, [
+            ("loot.opened", {"loot_session_id": "loot-1", "target_candidate": candidate}),
+            ("loot.visible", {"item_id": 100, "link": LINK_A, "quantity": 1,
+                              "loot_session_id": "loot-1", "source_status": "unknown",
+                              "sources": [], "source_candidates": [candidate]}),
+            ("item.received", {"item_id": 100, "link": LINK_A, "quantity": 1,
+                               "loot_session_id": "loot-1", "loot_match_status": "candidate",
+                               "source_status": "unknown", "source_candidates": [candidate]}),
+        ])
+        observations = session["observations"]
+        observations[1]["related_observation_ids"] = [observations[0]["observation_id"]]
+        observations[2]["related_observation_ids"] = [observations[1]["observation_id"]]
+        self.source.write_bytes(source_bytes(make_database(session)))
+        self.watcher.sync()
+        next_database = make_database(make_session(2, [
+            ("item.metadata", {"item_id": 101, "name": "New recording item"}),
+        ]))
+        next_database["next_session"] = 2
+        self.source.write_bytes(source_bytes(next_database))
+        self.watcher.sync()
+        for category in ("items", "npcs", "monsters"):
+            document = json.loads((self.output_dir / f"{category}.json").read_bytes())
+            records  = {row["id"]: row for row in document["records"]}
+            self.assertTrue(all(row["observation_id"] in records for row in observations))
+            for entry in document["entries"]:
+                if entry["nativeId"] in (100, 300):
+                    facts = [fact for fact in entry["facts"] if fact["type"] == "loot.provenance"]
+                    self.assertEqual(len(facts), 2)
+                    self.assertTrue(all(fact["data"]["source_status"] == "unknown" for fact in facts))
+
     def test_new_save_appends_evidence_without_creating_snapshots(self):
         first = self.watcher.sync()
         self.write_next_save()
