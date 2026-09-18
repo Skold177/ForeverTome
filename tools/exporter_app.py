@@ -13,7 +13,6 @@ import threading
 import time
 import tkinter as tk
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from types import SimpleNamespace
@@ -49,7 +48,7 @@ class ExporterApp:
         preferences        = load_settings(settings_file)
         self.client        = tk.StringVar(value=preferences.get("client", ""))
         self.addon_status  = tk.StringVar(value="Find your World of Warcraft: Forever Beta folder.")
-        self.addon_version = tk.StringVar(value="Installed version: not checked")
+        self.addon_version = tk.StringVar(value="Installed addon version: not checked")
         self.source        = tk.StringVar(value=source or preferences.get("source", ""))
         self.output_dir    = tk.StringVar(value=output_dir or preferences.get("output_dir", "")
                                          or str(Path.home() / "Documents" / "ForeverTome" / "Exports"))
@@ -164,7 +163,8 @@ class ExporterApp:
         self.client_browse = ttk.Button(paths, text="Browse…", command=self._browse_client)
         self.client_browse.pack(side="right", padx=(10, 0))
         ttk.Label(card, textvariable=self.addon_version, style="Card.TLabel").pack(anchor="w", pady=(16, 5))
-        ttk.Label(card, text="Updates come from the latest merged version in the ForeverTome repository.",
+        ttk.Label(card, text="Each update downloads the latest merged addon from GitHub.\n"
+                             "Keep using this application for future addon updates; no new installer is needed.",
                   style="CardMuted.TLabel", wraplength=750).pack(anchor="w")
         actions = ttk.Frame(body)
         actions.pack(fill="x", pady=18)
@@ -186,7 +186,7 @@ class ExporterApp:
         try:
             client  = self.installer.normalize_client(Path(self.client.get()))
             version = self.installer.installed_version(client)
-            self.addon_version.set("Installed version: " + (version or "not installed"))
+            self.addon_version.set("Installed addon version: " + (version or "not installed"))
             recordings = sorted((client / "WTF" / "Account").glob("*/SavedVariables/ForeverTome.lua"))
             if len(recordings) == 1 and not self.source.get():
                 self.source.set(str(recordings[0]))
@@ -264,7 +264,7 @@ class ExporterApp:
             elif kind == "installing":
                 self.addon_status.set(f"Installing addon {event['version']}…")
             elif kind == "installed":
-                self.addon_version.set("Installed version: " + event["version"])
+                self.addon_version.set("Installed addon version: " + event["version"])
                 self.addon_status.set(f"Installed {event['version']} successfully. Reload WoW to load the update.")
                 self._client_selected()
                 self._log(f"Installed addon {event['version']} ({event['commit'][:8]}).")
@@ -456,10 +456,19 @@ def smoke_test(report: Path) -> int:
             files = {"ForeverTome.toc": b"## Version: 0.2.3\n## SavedVariables: ForeverTomeDB\nCore.lua\nBootstrap.lua\n",
                      "Core.lua": b"-- synthetic core\n", "Bootstrap.lua": b"-- synthetic bootstrap\n",
                      "README.md": b"Synthetic package", "LICENSE": b"Synthetic package"}
+            updated = dict(files)
+            updated["ForeverTome.toc"] = files["ForeverTome.toc"].replace(b"0.2.3", b"9.8.7")
+            updated["Core.lua"]        = b"-- updated synthetic core\n"
+            packages = iter((addon_installer.AddonPackage("0.2.3", "a" * 40, files, "synthetic"),
+                             addon_installer.AddonPackage("9.8.7", "b" * 40, updated, "synthetic")))
+
+            def latest_addon():
+                return next(packages)
+
             backend = SimpleNamespace(normalize_client=addon_installer.normalize_client,
                                       installed_version=addon_installer.installed_version,
                                       install_addon=addon_installer.install_addon,
-                                      latest_addon=partial(addon_installer.AddonPackage, "0.2.3", "a" * 40, files, "synthetic"))
+                                      latest_addon=latest_addon)
             app = ExporterApp(root, str(source), str(folder / "exports"), folder / "settings.json",
                               discover=False, installer_backend=backend)
             app.client.set(str(client))
@@ -493,9 +502,17 @@ def smoke_test(report: Path) -> int:
                     elif state["phase"] == "restarted" and app.last_result:
                         state["phase"] = "install"
                         app._install_addon()
-                    elif state["phase"] == "install" and app.addon_status.get().startswith("Installed "):
+                    elif (state["phase"] == "install" and app.addon_status.get().startswith("Installed ")
+                          and not app.addon_thread.is_alive()):
                         assert addon_installer.installed_version(client) == "0.2.3"
                         for name, content in files.items():
+                            assert (client / "Interface" / "AddOns" / "ForeverTome" / name).read_bytes() == content
+                        state["phase"] = "update"
+                        app._install_addon()
+                    elif state["phase"] == "update" and app.addon_status.get().startswith("Installed 9.8.7 "):
+                        assert addon_installer.installed_version(client) == "9.8.7"
+                        assert app.addon_version.get() == "Installed addon version: 9.8.7"
+                        for name, content in updated.items():
                             assert (client / "Interface" / "AddOns" / "ForeverTome" / name).read_bytes() == content
                         state["phase"] = "close"
                         app.close()
@@ -513,7 +530,7 @@ def smoke_test(report: Path) -> int:
             assert state["phase"] == "close" and app.closed and not app.controller.running
             assert app.addon_thread is not None and not app.addon_thread.is_alive()
             result = {"ok": True, "tkVersion": tk.TkVersion, "categories": list(CATEGORIES), "stopAfterError": True,
-                      "addonInstall": True,
+                      "addonInstall": True, "addonUpdateWithoutRebuild": True,
                       "sourceUnchanged": True, "closedWithoutWorker": True, "frozen": bool(getattr(sys, "frozen", False))}
     except Exception as error:
         result["error"] = repr(error)

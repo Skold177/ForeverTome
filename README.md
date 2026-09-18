@@ -2,11 +2,13 @@
 
 ForeverTome records gameplay observations for the World of Warcraft: Forever item, creature, quest, spell, and talent database. Play normally; the addon keeps an ordered history with IDs, timestamps, locations, client build, and evidence for external tools to reconstruct later.
 
-**Version 0.2.3 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Live saved data confirms quest acceptance links, objective progress, turn-in dialogue links, native quest-item receipts, loot capture, and persistence in this build. Item stats and tooltip capture have offline regression coverage and still need an in-game test. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
+**Version 0.2.6 targets Forever Beta 1.60.1, build 69893.** Its API profile comes from the installed client's extracted source. Live saved data confirms quest acceptance links, objective progress, turn-in dialogue links, native quest-item receipts, loot capture, and persistence in this build. Item stats and tooltip capture have offline regression coverage and still need an in-game test. Unknown builds preserve saved data and restrict collection to lifecycle information until a profile is reviewed.
 
 ## Install and record
 
 Run **ForeverTomeSetup.exe** to install the desktop companion. Open its **Install / update addon** tab, select the detected WoW Forever folder, and click **Install / update addon** to install the latest merged addon from GitHub. You can browse to the game folder if detection misses it. The installer creates a Start menu shortcut and offers an optional desktop shortcut. See [desktop installation and usage](docs/desktop-exporter.md).
+
+Keep the installed companion for future addon updates: every click fetches the current addon from `main`, including versions published after your installer was built. You do not need to download another installer to update the addon. The window reports the installed addon's own version.
 
 For a manual installation, copy the `ForeverTome` directory into the selected client's `Interface/AddOns` directory, or run from this repository:
 
@@ -14,7 +16,7 @@ For a manual installation, copy the `ForeverTome` directory into the selected cl
 py tools/package.py --install 'D:\World of Warcraft\_classic_beta_'
 ```
 
-This also builds `dist/ForeverTome-0.2.3.zip`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
+This also builds `dist/ForeverTome-0.2.6.zip`; the filename follows the version in `ForeverTome/ForeverTome.toc`. It copies addon files without changing SavedVariables or game settings. Restart the client if the addon was installed while it was running, enable ForeverTome in the AddOns list, and log in. Recording starts automatically.
 
 The TOC interface value `16001` matches the live client's recorded `GetBuildInfo()` result. For a different measured interface, package with `--interface <measured-number>`; changing the manifest does not admit a different client build. [Client evidence](docs/implementation-client.md) explains the distinction.
 

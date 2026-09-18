@@ -7,6 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.versioning import addon_version, validate_version
+
 ROOT     = Path(__file__).resolve().parents[1]
 APP_NAME = "ForeverTomeExporter"
 
@@ -22,7 +27,10 @@ No Python installation is needed to run this application.
 5. Use /reload or log out normally in WoW to save new observations.
 
 Installing or updating needs an internet connection. It uses the latest merged main
-commit of Skold177/ForeverTome, not unpublished work or a tagged release.
+commit of Skold177/ForeverTome each time you click Install / update addon.
+Keep this application to fetch future addon updates; no replacement installer is
+needed for addon updates. The setup and application version identify the companion
+build, while the installed addon version comes from the downloaded addon.
 It updates ForeverTome addon files and preserves SavedVariables and other addons.
 Restart WoW after a first installation; reload after updating an enabled addon.
 
@@ -52,19 +60,44 @@ License: GNU General Public License version 2; see the adjacent LICENSE.
 """
 
 
+def windows_version_info(version: str) -> str:
+    version = validate_version(version)
+    parts   = tuple(int(part) for part in version.split(".")) + (0,)
+    return f"""VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={parts!r}, prodvers={parts!r},
+    mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'ForeverTome'),
+      StringStruct('FileDescription', 'ForeverTome Exporter'),
+      StringStruct('FileVersion', '{version}'),
+      StringStruct('InternalName', '{APP_NAME}'),
+      StringStruct('OriginalFilename', '{APP_NAME}.exe'),
+      StringStruct('ProductName', 'ForeverTome Exporter'),
+      StringStruct('ProductVersion', '{version}')])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])])
+"""
+
+
 def build(output_dir: Path) -> Path:
     if sys.platform != "win32":
         raise ValueError("Build the Windows exporter on Windows")
-    output_dir = output_dir.resolve()
-    build_dir  = ROOT / "artifacts" / "exporter-build"
-    entry      = ROOT / "tools" / "exporter_app.py"
+    output_dir   = output_dir.resolve()
+    build_dir    = ROOT / "artifacts" / "exporter-build"
+    entry        = ROOT / "tools" / "exporter_app.py"
+    version      = addon_version(ROOT)
+    version_file = build_dir / "windows-version.txt"
     if not entry.is_file():
         raise ValueError("Missing exporter application entry point")
     output_dir.mkdir(parents=True, exist_ok=True)
     build_dir.mkdir(parents=True, exist_ok=True)
+    version_file.write_text(windows_version_info(version), encoding="utf-8")
+    (output_dir / "VERSION").unlink(missing_ok=True)
     command = [
         sys.executable, "-m", "PyInstaller", "--noconfirm", "--onefile", "--windowed",
         "--name", APP_NAME,
+        "--version-file", str(version_file),
         "--paths", str(ROOT),
         "--distpath", str(output_dir),
         "--workpath", str(build_dir / "work"),
@@ -83,6 +116,7 @@ def build(output_dir: Path) -> Path:
         raise ValueError("Packaged exporter failed its smoke test")
     shutil.copyfile(ROOT / "LICENSE", output_dir / "LICENSE")
     (output_dir / "README.txt").write_text(APP_README, encoding="utf-8")
+    (output_dir / "VERSION").write_text(version + "\n", encoding="utf-8")
     return executable
 
 

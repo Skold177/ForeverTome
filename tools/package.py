@@ -6,12 +6,18 @@ import sys
 import zipfile
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.versioning import manifest_version
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def addon_files(interface: int | None = None) -> dict[str, bytes]:
     source   = ROOT / "ForeverTome"
     manifest = (source / "ForeverTome.toc").read_text(encoding="utf-8")
+    manifest_version(manifest)
     if interface is not None:
         if interface < 1 or interface > 999999:
             raise ValueError("Interface must be the positive number reported by GetBuildInfo()")
@@ -63,14 +69,16 @@ def install(files: dict[str, bytes], client: Path) -> Path:
 
 def main(arguments=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "dist" / "ForeverTome-0.2.3.zip")
+    parser.add_argument("--output", type=Path, help="ZIP destination; defaults to dist/ForeverTome-<version>.zip")
     parser.add_argument("--install", type=Path, metavar="CLIENT", help="Product directory containing the executable")
     parser.add_argument("--interface", type=int, help="Override the provisional TOC with the measured interface version")
     options = parser.parse_args(arguments)
     try:
-        files = addon_files(options.interface)
-        write_zip(files, options.output)
-        print(f"Built {options.output}")
+        files       = addon_files(options.interface)
+        version     = manifest_version(files["ForeverTome.toc"].decode("utf-8"))
+        destination = options.output or ROOT / "dist" / f"ForeverTome-{version}.zip"
+        write_zip(files, destination)
+        print(f"Built {destination}")
         if options.install:
             print(f"Installed {install(files, options.install)}")
         return 0

@@ -1,6 +1,6 @@
-local _, FT = ...
+local addonName, FT = ...
 
-FT.VERSION = "0.2.3"
+FT.VERSION = "unknown"
 FT.SCHEMA  = 1
 FT.LIMITS  = {
     records = 60000, bytes = 48 * 1024 * 1024, sessions = 512,
@@ -98,6 +98,17 @@ function FT.Resolve(path)
     end
     if FT.Readable(current) and type(current) == "function" then
         return current
+    end
+end
+
+for _, path in ipairs({ "C_AddOns.GetAddOnMetadata", "GetAddOnMetadata" }) do
+    local metadata = FT.Resolve(path)
+    if metadata then
+        local ok, version = pcall(metadata, addonName, "Version")
+        if ok and FT.Value(version, "string") and version ~= "" then
+            FT.VERSION = version
+            break
+        end
     end
 end
 

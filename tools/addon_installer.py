@@ -163,8 +163,11 @@ def _manifest(content: bytes) -> tuple[str, list[str]]:
 
 def _download(url: str, limit: int) -> bytes:
     request = urllib.request.Request(url, headers={
-        "User-Agent": "ForeverTomeExporter", "Accept": "application/vnd.github+json" if url == API_URL else "application/zip",
+        "User-Agent": "ForeverTomeExporter",
+        "Accept": "application/vnd.github+json" if url == API_URL else "application/zip",
     })
+    if url == API_URL:
+        request.add_header("Cache-Control", "no-cache")
     with urllib.request.urlopen(request, timeout=30) as response:
         if not response.geturl().startswith("https://"):
             raise InstallError("The addon download did not remain on HTTPS")
