@@ -7,6 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.versioning import validate_version
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -36,10 +41,11 @@ def build(bundle_dir: Path, output_dir: Path, compiler: Path | None = None) -> P
         raise ValueError("Build the Windows installer on Windows")
     bundle_dir = bundle_dir.resolve()
     output_dir = output_dir.resolve()
-    for name in ("ForeverTomeExporter.exe", "LICENSE", "README.txt"):
+    for name in ("ForeverTomeExporter.exe", "LICENSE", "README.txt", "VERSION"):
         source = bundle_dir / name
         if not source.is_file() or source.stat().st_size == 0:
             raise ValueError(f"Missing application bundle file: {source}; run tools/package_exporter.py first")
+    validate_version((bundle_dir / "VERSION").read_text(encoding="utf-8").strip())
     compiler = find_compiler(compiler)
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [

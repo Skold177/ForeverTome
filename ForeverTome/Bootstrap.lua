@@ -54,7 +54,7 @@ SlashCmdList.FOREVERTOME = function(message)
             FT.Print("Wait until you enter the world, then use /ft dump.")
         else
             FT.Dispatch("FT_CATALOG")
-            FT.Print("Scanning accessible spells and talent trees. Use /ft status; wait for idle scans and 0 pending spell reads, then /reload to save.")
+            FT.Print("Scanning spells, talents, storage, and the open profession. Use /ft status; wait for idle scans and 0 pending spell reads, then /reload to save.")
         end
         return
     elseif message == "save" or message == "export" then
@@ -68,11 +68,14 @@ SlashCmdList.FOREVERTOME = function(message)
     local state  = status.blocked or (status.paused and "paused" or "recording")
     FT.Print(string.format("%s | %d observations | %d sessions | about %.1f MiB | %s",
         state, status.records, status.sessions, status.estimated_bytes / 1048576, status.adapter_id or "unknown"))
-    local spells  = FT.SpellStatus()
-    local talents = FT.TalentStatus()
+    local spells      = FT.SpellStatus()
+    local talents     = FT.TalentStatus()
+    local professions = FT.ProfessionStatus()
     FT.Print(string.format("Spellbook: %s (%s) | talents: %s (%s) | pending spell reads: %d",
         spells.scanning and "scanning" or "idle", spells.completeness or "not sampled",
         talents.scanning and "scanning" or "idle", talents.completeness or "not sampled", spells.pending))
+    FT.Print(string.format("Recipes in the current profession view: %s (%s) | %d sampled. Open each profession to capture its recipes.",
+        professions.scanning and "scanning" or "idle", professions.completeness or "not sampled", professions.recipe_count))
     if (spells.metadata_dropped or 0) > 0 then
         FT.Print(string.format("Spell metadata requests skipped at capacity: %d. Some spell details are missing.", spells.metadata_dropped))
     end

@@ -1,4 +1,52 @@
 return {
+    { name = "runtime and session versions follow addon TOC metadata", run = function(Host)
+        local h = Host.new()
+        h:start()
+        assert(h.metadata.Version and h.metadata.Version ~= "")
+        assert(h.FT.VERSION == h.metadata.Version)
+        assert(h.FT.Export().sessions[1].session.addon_version == h.metadata.Version)
+        h:assertHealthy()
+    end },
+    { name = "runtime version follows changed metadata without a code change", run = function(Host)
+        local h = Host.new(nil, nil, nil, function(env)
+            env.C_AddOns.GetAddOnMetadata = function(name, field)
+                assert(name == "ForeverTome" and field == "Version")
+                return "9.8.7"
+            end
+        end)
+        h:start()
+        assert(h.FT.VERSION == "9.8.7")
+        assert(h.FT.Export().sessions[1].session.addon_version == "9.8.7")
+        h:assertHealthy()
+    end },
+    { name = "legacy metadata supplies the version when the modern API is absent", run = function(Host)
+        local h = Host.new(nil, nil, nil, function(env)
+            env.C_AddOns = nil
+        end)
+        h:start()
+        assert(h.FT.VERSION == h.metadata.Version)
+        assert(h.FT.Export().sessions[1].session.addon_version == h.metadata.Version)
+        h:assertHealthy()
+    end },
+    { name = "unavailable version metadata does not stop recording", run = function(Host)
+        for _, metadata in ipairs({ false, function()
+            return nil
+        end, function()
+            return ""
+        end, function()
+            error("metadata unavailable")
+        end }) do
+            local h = Host.new(nil, nil, nil, function(env)
+                env.C_AddOns.GetAddOnMetadata = metadata
+                env.GetAddOnMetadata          = nil
+            end)
+            h:start()
+            assert(h.FT.VERSION == "unknown")
+            assert(h.FT.Export().sessions[1].session.addon_version == "unknown")
+            assert(#h:records() > 0)
+            h:assertHealthy()
+        end
+    end },
     { name = "manual catalogs preserve timing without fabricating a client event", run = function(Host)
         local h = Host.new()
         h:start()

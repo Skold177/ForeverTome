@@ -34,7 +34,7 @@ ACTIONS  = {
     "quest.objective_delta", "quest.ready", "item.received", "inventory.delta",
     "spell.succeeded", "spell.learned", "recipe.learned", "craft.result",
     "loot.opened", "loot.closed", "loot.slot_cleared", "merchant.opened",
-    "merchant.closed", "player.state", "spellbook.changed",
+    "merchant.closed", "player.state", "spellbook.changed", "gathering.attempt",
 }
 
 
@@ -302,15 +302,18 @@ class CatalogTests(unittest.TestCase):
             with self.subTest(status=status, matches=matches):
                 data     = {"item_id": 100, "link": LINK_A, "quantity": 4, "loot_session_id": "loot-1",
                             "slot": 1, "revision": 1, "sources": sources, "source_status": status,
-                            "source_quantity_matches": matches, "source_candidates": []}
+                            "source_quantity_matches": matches, "source_candidates": [],
+                            "source_mapping_status": "validated" if status == "mapped" else "unverified"}
                 document = catalog.build_catalog(make_database(make_session(1, [("loot.visible", data)])), SHA256)
                 row      = document["observations"][0]
                 item     = document["catalog"]["items"][0]
                 npcs     = document["catalog"]["npcs"]
                 self.assertEqual({npc["nativeId"] for npc in npcs}, {300, 301})
                 role = "loot_source" if status == "mapped" and matches else "loot_candidate"
-                self.assertEqual([reference["role"] for reference in row["entities"]], ["item", role, role])
-                for entity in [item, *npcs]:
+                objects = document["catalog"]["objects"]
+                self.assertEqual([entry["nativeId"] for entry in objects], [400])
+                self.assertEqual([reference["role"] for reference in row["entities"]], ["item", role, role, role])
+                for entity in [item, *npcs, *objects]:
                     facts = [fact for fact in entity["facts"] if fact["type"] == "loot.provenance"]
                     self.assertEqual(len(facts), 1)
                     self.assertEqual(facts[0]["data"], data)

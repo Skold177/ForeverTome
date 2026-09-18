@@ -15,6 +15,9 @@ from typing import Callable
 from tools.watch_catalog import CATEGORIES, CatalogWatcher
 
 
+DISPLAY_CATEGORIES = tuple(category for category in CATEGORIES if category not in ("npcs", "monsters"))
+
+
 def settings_path() -> Path:
     root = os.environ.get("LOCALAPPDATA")
     if root:
@@ -108,10 +111,31 @@ class ExporterController:
             value = summary.get(field)
             if type(value) is not int or value < 0:
                 raise ValueError(f"The catalog summary has an invalid {field}")
+        history         = read_document(output_dir / "history.json")
+        database        = read_document(output_dir / "database.json")
+        history_id      = history.get("historyId")
+        history_summary = history.get("summary")
+        coverage        = database.get("coverage")
+        if (not isinstance(history_id, str) or not history_id or history.get("exportId") != export_id
+                or database.get("exportId") != export_id or database.get("historyId") != history_id):
+            raise ValueError("The history and database files do not match the current export")
+        if not isinstance(history_summary, dict) or not isinstance(coverage, dict):
+            raise ValueError("The retained history is missing its coverage summary")
+        for field, database_field in (("observationCount", "recordCount"), ("sessionCount", "sessionCount")):
+            value = history_summary.get(field)
+            if type(value) is not int or value < 0 or coverage.get(database_field) != value:
+                raise ValueError(f"The retained history summary has an invalid {field}")
+        kinds   = history_summary.get("kindCounts")
+        scans   = coverage.get("scans")
+        missing = coverage.get("missingReasonCounts")
+        if (not isinstance(kinds, dict) or not isinstance(scans, list) or not isinstance(missing, dict)
+                or any(type(count) is not int or count < 0 for count in (*kinds.values(), *missing.values()))):
+            raise ValueError("The retained history has invalid coverage counts")
         counts = {}
         for category in CATEGORIES:
             view = read_document(output_dir / f"{category}.json")
-            if view.get("exportId") != export_id or view.get("category") != category:
+            if (view.get("exportId") != export_id or view.get("category") != category
+                    or view.get("historyId") != history_id):
                 raise ValueError("The category files do not match the current export")
             entries = view.get("entries")
             if not isinstance(entries, list):
@@ -122,6 +146,10 @@ class ExporterController:
         return {
             "type": kind, "summary": summary, "exportId": export_id,
             "output_dir": str(output_dir), "saved_at": saved_at, "categoryCounts": counts,
+            "historyId": history_id, "historySummary": history_summary,
+            "canonicalCategoryCounts": {category: counts[category] for category in DISPLAY_CATEGORIES},
+            "coverageSummary": {"gapCount": kinds.get("coverage.gap", 0), "scanCount": len(scans),
+                                "missingFieldCount": sum(missing.values())},
         }
 
     def _run(self, source: Path, output_dir: Path, watch: bool) -> None:

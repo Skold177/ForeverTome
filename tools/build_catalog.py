@@ -21,18 +21,18 @@ from tools.catalog_entities import CatalogBuilder
 
 FORMAT            = "forevertome.website-catalog"
 SCHEMA_VERSION    = 1
-GENERATOR_VERSION = "0.2.6"
+GENERATOR_VERSION = "0.3.0"
 TRANSACTION_KINDS = frozenset("""
 quest.accepted quest.turned_in quest.reward_received quest.removed quest.objective_delta quest.ready
 item.received inventory.delta loot.opened loot.slot_cleared loot.closed merchant.opened merchant.closed
-spell.succeeded spell.learned spellbook.changed recipe.learned craft.result player.state
+spell.succeeded spell.learned spellbook.changed recipe.learned craft.result player.state gathering.attempt
 """.split())
 OBSERVATION_KINDS = frozenset("""
 session.started session.ended coverage.gap player.snapshot unit.sighting world.context world.transition
 location.sample merchant.offer spell.metadata spell.metadata_unavailable spellbook.snapshot spellbook.scan
 talent.metadata talent.rank talent.build talent.snapshot profession.snapshot recipe.metadata quest.baseline
 quest.metadata_unavailable quest.snapshot quest.log_scope quest.dialogue quest.metadata interaction.snapshot
-item.metadata_unresolved item.metadata loot.visible loot.snapshot loot.slot_unavailable inventory.snapshot
+item.metadata_unresolved item.metadata loot.visible loot.snapshot loot.slot_unavailable inventory.snapshot inventory.storage recipe.scan
 """.split())
 CHANNELS = {
     "quest.reward_received": "quest_reward_receipt",

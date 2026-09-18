@@ -67,7 +67,15 @@ class CategoryMergeTests(unittest.TestCase):
             ("spell.metadata", {"spell_id": 20, "name": "Spell"}),
             ("talent.metadata", {"entity_type": "node", "entity_id": 30, "info": {"name": "Talent"}}),
             ("quest.metadata", {"quest_id": 40, "title": "Quest"}),
+            ("recipe.metadata", {"recipe_id": 50, "name": "Recipe"}),
+            ("profession.snapshot", {"professionID": 60, "professionName": "Profession"}),
+            ("merchant.offer", {"currency_id": 70, "currency_name": "Currency"}),
+            ("unit.sighting", {"source_guid": "GameObject-0-1-2-3-80-000001", "name": "Object"}),
         ])
+        session["observations"][0]["location"] = {
+            "status": "available", "subject": "player", "coordinate_system": "ui_map_normalized",
+            "ui_map_id": 1411, "x": 0.2, "y": 0.3,
+        }
         for category in CATEGORIES:
             if category == "gathering":
                 continue
@@ -108,6 +116,7 @@ class CategoryMergeTests(unittest.TestCase):
         self.assertEqual(result["sessions"], current["sessions"])
         self.assertEqual(result["records"], previous["records"])
         self.assertEqual(len(result["records"]), 2)
+        self.assertEqual(merge_category(result, previous)["sessions"], current["sessions"])
 
     def test_conflicting_raw_observations_headers_and_contexts_are_rejected(self):
         previous = category_view("items", make_session(1, [

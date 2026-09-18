@@ -1,7 +1,7 @@
 local Host     = dofile("tests/support/host.lua")
 local passed   = 0
 local failed   = 0
-local required = { "core", "quests", "loot", "world", "spells", "talents" }
+local required = { "core", "quests", "loot", "world", "spells", "talents", "inventory", "gathering" }
 
 for _, name in ipairs(required) do
     local ok, suite = pcall(dofile, "tests/" .. name .. ".lua")

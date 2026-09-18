@@ -12,7 +12,7 @@ import re
 BUCKETS = {
     "item": "items", "quest": "quests", "npc": "npcs", "spell": "spells",
     "talent": "talents", "recipe": "recipes", "map": "maps",
-    "profession": "professions", "currency": "currencies",
+    "profession": "professions", "currency": "currencies", "object": "objects",
 }
 ITEM_FIELDS = frozenset({
     "item_id", "itemID", "link", "item_link", "hyperlink", "requested_link", "name",
@@ -23,6 +23,8 @@ ITEM_FIELDS = frozenset({
     "isPurchasable", "isUsable", "hasExtendedCost", "usable", "context_flags", "links",
     "stats", "stat_labels", "stats_status", "stats_link", "stats_context", "stats_method",
     "tooltip_lines", "tooltip_status", "tooltip_link", "tooltip_context", "tooltip_method",
+    "effect_spell_id", "use_spell_id", "equip_spell_id", "item_spell_id", "item_spell_name",
+    "item_spell_status", "item_spell_method", "gems",
 })
 SPELL_FIELDS = frozenset({
     "spell_id", "spellID", "name", "iconID", "originalIconID", "castTime", "minRange",
@@ -76,6 +78,7 @@ class CatalogBuilder:
         self._context  = None
         self._source   = None
         self._kind     = None
+        self._session  = None
         self._refs     = []
         self._seen     = set()
 
@@ -122,6 +125,7 @@ class CatalogBuilder:
             "iconId": ("icon_id", "iconID", "overrideIcon", "icon", "texture"),
             "iconPath": ("icon_path",),
             "link": ("link", "hyperlink", "item_link"),
+            "observedLabel": ("observed_label",),
         }
         for target, candidates in aliases.items():
             for field in candidates:
@@ -253,7 +257,17 @@ class CatalogBuilder:
             data   = {key: value for key, value in row.items() if key != "entity_position"}
             self._fact(entity, path, data, "unit.descriptor")
             self._display(entity, data, 20, details=row)
+        guid = row.get("source_guid", row.get("guid"))
+        if entity is None and isinstance(guid, str):
+            match = re.fullmatch(r"GameObject-[0-9]+-[0-9]+-[0-9]+-[0-9]+-([1-9][0-9]{0,9})-[0-9A-Fa-f]+", guid)
+            if match and int(match.group(1)) <= 2147483647:
+                guid_field = "source_guid" if "source_guid" in row else "guid"
+                entity = self._entity("object", int(match.group(1)), role, f"{path}.{guid_field}")
+                self._fact(entity, path, row, "object.descriptor")
+                self._display(entity, row, 20)
         position = row.get("entity_position")
+        if entity is not None and isinstance(position, dict):
+            self._fact(entity, path, {"entity_position": position}, "unit.position")
         if isinstance(position, dict) and _identifier(position.get("map_id")):
             self._entity("map", f"map:{position['map_id']}", "entity_position_map", f"{path}.entity_position.map_id")
         return entity
@@ -270,7 +284,7 @@ class CatalogBuilder:
         })
         self._fact(item, "data", provenance, "loot.provenance")
         mapped      = data.get("source_status") == "mapped" and data.get("source_quantity_matches") is not False
-        source_role = "loot_source" if mapped and data.get("source_mapping_status") != "unverified" else "loot_candidate"
+        source_role = "loot_source" if mapped and data.get("source_mapping_status") == "validated" else "loot_candidate"
         for field, role in (("sources", source_role), ("source_candidates", "loot_candidate")):
             for index, row in _rows(data.get(field)):
                 entity = self._unit(row, f"data.{field}[{index}]", role)
@@ -298,7 +312,8 @@ class CatalogBuilder:
 
     def _talent_ref(self, namespace, identity, role, path):
         if _identifier(identity):
-            return self._entity("talent", f"{namespace}:{identity}", role, path)
+            native_id = f"config:{self._session}:{identity}" if namespace == "config" else f"{namespace}:{identity}"
+            return self._entity("talent", native_id, role, path)
         return None
 
     def _talent(self, data):
@@ -402,18 +417,39 @@ class CatalogBuilder:
             self._display(entity, data, 100 if self._kind == "recipe.metadata" else 10)
         if _identifier(data.get("base_recipe_id")):
             self._entity("recipe", data["base_recipe_id"], "base_recipe", "data.base_recipe_id")
+        for field, role in (("previous_recipe_id", "previous_recipe"), ("next_recipe_id", "next_recipe"),
+                            ("previousRecipeID", "previous_recipe"), ("nextRecipeID", "next_recipe")):
+            if _identifier(data.get(field)):
+                self._entity("recipe", data[field], role, f"data.{field}")
+        if _identifier(data.get("profession_id")):
+            self._entity("profession", data["profession_id"], "profession", "data.profession_id")
         if _identifier(data.get("output_item_id")):
             self._entity("item", data["output_item_id"], "recipe_output", "data.output_item_id")
+        if isinstance(data.get("quality_item_ids"), list):
+            for index, identity in enumerate(data["quality_item_ids"]):
+                if _identifier(identity):
+                    self._entity("item", identity, "recipe_quality_output", f"data.quality_item_ids[{index}]")
+        if isinstance(data.get("recipe_ids"), list):
+            for index, identity in enumerate(data["recipe_ids"]):
+                if _identifier(identity):
+                    self._entity("recipe", identity, "scanned_recipe", f"data.recipe_ids[{index}]")
         for index, slot in _rows(data.get("reagent_slots")):
             for reagent_index, row in _rows(slot.get("reagents")):
                 path = f"data.reagent_slots[{index}].reagents[{reagent_index}]"
                 self._item(row, path, "recipe_reagent")
                 self._currency(row, path, "recipe_reagent", "currencyID")
+            for quantity_index, variable in _rows(slot.get("variable_quantities")):
+                row = variable.get("reagent")
+                if isinstance(row, dict):
+                    path = f"data.reagent_slots[{index}].variable_quantities[{quantity_index}].reagent"
+                    self._item(row, path, "recipe_reagent")
+                    self._currency(row, path, "recipe_reagent", "currencyID")
 
     def add(self, context_id: str, observation: dict) -> list[dict]:
         self._context = context_id
         self._source  = observation["observation_id"]
         self._kind    = observation["kind"]
+        self._session = observation["session_id"]
         self._refs    = []
         self._seen    = set()
         data          = observation.get("data", {})
@@ -427,8 +463,23 @@ class CatalogBuilder:
             ("target", "spell_target"), ("target_candidate", "loot_candidate"),
             ("mouseover_candidate", "loot_candidate"),
         ):
-            self._unit(data.get(field), f"data.{field}", role)
+            if self._kind == "gathering.attempt" and field == "target_candidate":
+                role = "gathering_target_candidate"
+            unit = self._unit(data.get(field), f"data.{field}", role)
+            if field == "npc" and self._kind == "interaction.snapshot" and isinstance(data.get("service"), str):
+                self._fact(unit, "data", {"service": data["service"], "scope": data.get("scope")}, "npc.service")
         item = self._item(data, "data", "item")
+        if item is not None and self._kind == "item.metadata":
+            for field in ("effect_spell_id", "use_spell_id", "equip_spell_id", "item_spell_id"):
+                if _identifier(data.get(field)):
+                    spell = self._entity("spell", data[field], field, f"data.{field}")
+                    info  = {"spell_id": data[field]}
+                    if field == "item_spell_id" and isinstance(data.get("item_spell_name"), str):
+                        info["name"] = data["item_spell_name"]
+                    self._fact(spell, f"data.{field}", info, "item.spell")
+                    self._display(spell, info)
+            for index, gem in _rows(data.get("gems")):
+                self._item(gem, f"data.gems[{index}]", "socketed_gem")
         self._loot(data, item)
         self._quest(data, "data", "quest")
         self._spell(data, "data", "spell")
@@ -476,7 +527,7 @@ class CatalogBuilder:
         return self._refs
 
     def finish(self) -> dict[str, list[dict]]:
-        result = {bucket: [] for bucket in BUCKETS.values()}
+        result = {bucket: [] for kind, bucket in BUCKETS.items() if kind != "object"}
         for key in sorted(self._entities):
             source = self._entities[key]
             entity = {field: copy.deepcopy(value) for field, value in source.items()
@@ -493,5 +544,5 @@ class CatalogBuilder:
                     variant              = copy.deepcopy(source["variants"][variant_id])
                     variant["sourceIds"] = sorted(variant["sourceIds"])
                     entity["variants"].append(variant)
-            result[BUCKETS[entity["kind"]]].append(entity)
+            result.setdefault(BUCKETS[entity["kind"]], []).append(entity)
         return result

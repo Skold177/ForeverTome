@@ -20,12 +20,12 @@ COMMIT   = "a" * 40
 MANIFEST = b"## Interface: 16001\n## Version: 0.2.3\n## SavedVariables: ForeverTomeDB\n\nCore.lua\nBootstrap.lua\n"
 
 
-def make_archive(extra=None, manifest=MANIFEST):
-    prefix  = f"ForeverTome-{COMMIT}/"
+def make_archive(extra=None, manifest=MANIFEST, commit=COMMIT, core=b"local addon = {}\n"):
+    prefix  = f"ForeverTome-{commit}/"
     content = io.BytesIO()
     files   = {
         prefix: b"", prefix + "ForeverTome/ForeverTome.toc": manifest,
-        prefix + "ForeverTome/Core.lua": b"local addon = {}\n",
+        prefix + "ForeverTome/Core.lua": core,
         prefix + "ForeverTome/Bootstrap.lua": b"return true\n",
         prefix + "README.md": b"Addon instructions\n", prefix + "LICENSE": b"MIT\n",
         prefix + "tests/unrelated.lua": b"Must never be installed\n",
@@ -95,6 +95,39 @@ class AddonInstallerTests(unittest.TestCase):
                 with self.assertRaises(installer.InstallError):
                     installer.latest_addon()
                 self.assertEqual(download.call_count, 1)
+
+    def test_same_installer_fetches_new_main_each_time_even_when_version_is_unchanged(self):
+        revisions = [("a" * 40, "0.2.3", b"original addon"),
+                     ("b" * 40, "9.8.7", b"future addon"),
+                     ("c" * 40, "9.8.7", b"future addon with another fix")]
+        responses = []
+        for commit, version, core in revisions:
+            manifest = MANIFEST.replace(b"0.2.3", version.encode())
+            responses.extend((json.dumps({"sha": commit}).encode(),
+                              make_archive(manifest=manifest, commit=commit, core=core)))
+        with patch.object(installer, "_download", side_effect=responses) as download:
+            for commit, version, core in revisions:
+                package = installer.latest_addon()
+                installer.install_addon(package, self.client)
+                self.assertEqual(package.commit, commit)
+                self.assertEqual(installer.installed_version(self.client), version)
+                self.assertEqual((self.target / "Core.lua").read_bytes(), core)
+        self.assertEqual([call.args[0] for call in download.call_args_list[::2]], [installer.API_URL] * 3)
+        self.assertEqual([call.args[0] for call in download.call_args_list[1::2]],
+                         [f"https://codeload.github.com/{installer.REPOSITORY}/zip/{commit}"
+                          for commit, _, _ in revisions])
+
+    def test_main_lookup_requests_cache_revalidation(self):
+        response = MagicMock()
+        response.geturl.return_value = installer.API_URL
+        response.read.return_value   = json.dumps({"sha": COMMIT}).encode()
+        context = MagicMock()
+        context.__enter__.return_value = response
+        with patch.object(installer.urllib.request, "urlopen", return_value=context) as request:
+            installer._download(installer.API_URL, 1024 * 1024)
+        headers = dict(request.call_args.args[0].header_items())
+        self.assertEqual(headers["Cache-control"], "no-cache")
+        self.assertEqual(headers["Accept"], "application/vnd.github+json")
 
     def test_download_uses_timeout_https_and_size_cap(self):
         response = MagicMock()

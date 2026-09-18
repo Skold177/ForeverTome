@@ -1,12 +1,18 @@
-#define AppVersion "0.1.2"
 #ifndef BundleDir
   #define BundleDir AddBackslash(SourcePath) + "..\dist\exporter"
 #endif
+#define VersionFile FileOpen(AddBackslash(BundleDir) + "VERSION")
+#define AppVersion Trim(FileRead(VersionFile))
+#expr FileClose(VersionFile)
 
 [Setup]
 AppId={{6104FC3B-C73E-4434-AE89-BDFE536291B3}
 AppName=ForeverTome Exporter
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
+VersionInfoTextVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=ForeverTome
 AppPublisherURL=https://github.com/Skold177/ForeverTome
 DefaultDirName={localappdata}\Programs\ForeverTomeExporter
@@ -33,6 +39,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "{#BundleDir}\ForeverTomeExporter.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BundleDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BundleDir}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BundleDir}\VERSION"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\ForeverTome Exporter"; Filename: "{app}\ForeverTomeExporter.exe"; WorkingDir: "{app}"

@@ -1,6 +1,6 @@
-local _, FT = ...
+local addonName, FT = ...
 
-FT.VERSION = "0.2.3"
+FT.VERSION = "unknown"
 FT.SCHEMA  = 1
 FT.LIMITS  = {
     records = 60000, bytes = 48 * 1024 * 1024, sessions = 512,
@@ -20,7 +20,7 @@ talent.metadata talent.rank talent.build talent.snapshot
 quest.baseline quest.metadata_unavailable quest.snapshot quest.objective_delta quest.ready
 quest.log_scope quest.dialogue quest.accepted quest.turned_in quest.removed quest.metadata quest.reward_received
 interaction.snapshot item.metadata_unresolved item.metadata item.received loot.visible loot.opened
-loot.snapshot loot.slot_unavailable loot.slot_cleared loot.closed inventory.snapshot inventory.delta
+loot.snapshot loot.slot_unavailable loot.slot_cleared loot.closed inventory.snapshot inventory.delta inventory.storage recipe.scan gathering.attempt
 ]], "%S+") do
     recordKinds[kind] = true
 end
@@ -98,6 +98,17 @@ function FT.Resolve(path)
     end
     if FT.Readable(current) and type(current) == "function" then
         return current
+    end
+end
+
+for _, path in ipairs({ "C_AddOns.GetAddOnMetadata", "GetAddOnMetadata" }) do
+    local metadata = FT.Resolve(path)
+    if metadata then
+        local ok, version = pcall(metadata, addonName, "Version")
+        if ok and FT.Value(version, "string") and version ~= "" then
+            FT.VERSION = version
+            break
+        end
     end
 end
 

@@ -15,19 +15,24 @@ local function equal(left, right, path)
     end
 end
 
-function Host.new(saved, version, build)
-    local h = { FT = {}, state = { time = 100, map = 42, x = 0.45, y = 0.62 }, frames = {}, messages = {} }
+function Host.new(saved, version, build, configure)
+    local h = { FT = {}, state = { time = 100, map = 42, x = 0.45, y = 0.62 }, frames = {}, messages = {}, metadata = {} }
     local e = {
         assert = assert, error = error, ipairs = ipairs, pairs = pairs, next = next,
         pcall = pcall, select = select, tonumber = tonumber, tostring = tostring, type = type,
         unpack = unpack, getmetatable = getmetatable, setmetatable = setmetatable,
         math = math, string = string, table = table, SlashCmdList = {},
         WOW_PROJECT_ID = 99, ForeverTomeDB = saved,
-        C_EventUtils = {}, C_Map = {}, C_QuestLog = {}, C_Item = {}, C_Container = {},
+        C_AddOns = {}, C_EventUtils = {}, C_Map = {}, C_QuestLog = {}, C_Item = {}, C_Container = {},
         C_CreatureInfo = {}, C_Spell = {}, C_TradeSkillUI = {}, C_MerchantFrame = {}, C_GossipInfo = {},
     }
     h.env = e
     e._G  = e
+    e.C_AddOns.GetAddOnMetadata = function(name, field)
+        assert(name == "ForeverTome", "metadata requested for unrelated addon")
+        return h.metadata[field]
+    end
+    e.GetAddOnMetadata = e.C_AddOns.GetAddOnMetadata
     e.GetTime = function()
         return h.state.time
     end
@@ -103,7 +108,14 @@ function Host.new(saved, version, build)
         table.insert(h.frames, frame)
         return frame
     end
+    if configure then
+        configure(e)
+    end
     for line in io.lines("ForeverTome/ForeverTome.toc") do
+        local field, value = line:match("^## ([%w_]+):%s*(.-)%s*$")
+        if field then
+            h.metadata[field] = value
+        end
         local file = line:match("^([%w_]+%.lua)%s*$")
         if file then
             local chunk = assert(loadfile("ForeverTome/" .. file))
