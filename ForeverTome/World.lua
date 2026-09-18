@@ -6,6 +6,8 @@ local offers      = {}
 local lastPlayer
 local lastRoute
 local lastRouteAt = 0
+local npcCasts    = {}
+local castOrder   = {}
 
 local function selectFields(source, fields)
     local result = {}
@@ -36,6 +38,19 @@ local function playerSnapshot(event)
     end
 end
 
+local function unitMissing(data, prefix)
+    local missing = {}
+    for _, key in ipairs({ "creature_id", "name", "level", "classification", "creature_type", "reaction", "max_health" }) do
+        if data[key] == nil then
+            missing[prefix .. key] = "not_ready_or_restricted"
+        end
+    end
+    if data.entity_position == nil then
+        missing[prefix .. "entity_position"] = "native_position_unavailable"
+    end
+    return missing
+end
+
 local function sight(event, token)
     if not FT.InWorld then
         return
@@ -50,8 +65,7 @@ local function sight(event, token)
     if prior and prior.guid == data.guid and prior.dead == data.dead and current - prior.at < 10 then
         return
     end
-    local id = FT.Emit("unit.sighting", data, event, "api_snapshot", nil,
-        data.creature_id and {} or { ["data.creature_id"] = "not_ready" })
+    local id = FT.Emit("unit.sighting", data, event, "api_snapshot", nil, unitMissing(data, "data."))
     if id then
         sightings[token] = { guid = data.guid, dead = data.dead, at = current }
     end
@@ -161,89 +175,14 @@ local function merchantSnapshot(event)
     end
 end
 
-local function professionSnapshot(event)
-    local source = FT.Call("C_TradeSkillUI.GetBaseProfessionInfo")
-    local data   = selectFields(source, {
-        professionID = "number", professionName = "string", expansionName = "string",
-        skillLevel = "number", maxSkillLevel = "number", parentProfessionID = "number",
-        sourceCounter = "number", skillModifier = "number", isPrimaryProfession = "boolean",
-    })
-    if data.professionID then
-        data.scope = "currently_viewed_profession"
-        FT.Emit("profession.snapshot", data, event)
-    end
-end
-
-local function recipeLearned(event, recipeID, recipeLevel, baseRecipeID)
-    recipeID = FT.Value(recipeID, "number")
-    if not recipeID or recipeID <= 0 then
-        return
-    end
-    local related = FT.Emit("recipe.learned", {
-        recipe_id = recipeID, recipe_level = FT.Value(recipeLevel, "number"),
-        base_recipe_id = FT.Value(baseRecipeID, "number"),
-    }, event, "direct_event")
-    local source  = FT.Call("C_TradeSkillUI.GetRecipeInfo", recipeID)
-    local missing = {}
-    local data    = selectFields(source, {
-        name = "string", recipeID = "number", learned = "boolean", categoryID = "number",
-        skillLineAbilityID = "number", hyperlink = "string", maxTrivialLevel = "number",
-    })
-    if not data.name then
-        missing["data.name"] = "not_ready"
-    end
-    data.recipe_id = recipeID
-    local schematic = FT.Call("C_TradeSkillUI.GetRecipeSchematic", recipeID, false)
-    data.output_item_id = FT.Field(schematic, "outputItemID", "number")
-    data.quantity_min   = FT.Field(schematic, "quantityMin", "number")
-    data.quantity_max   = FT.Field(schematic, "quantityMax", "number")
-    data.reagent_slots  = {}
-    local slots     = FT.Field(schematic, "reagentSlotSchematics", "table")
-    local slotCount = FT.Length(slots)
-    if not slotCount then
-        missing["data.reagent_slots"] = "not_ready"
-    elseif slotCount > 32 then
-        missing["data.reagent_slots"] = "capacity_limit"
-    end
-    for index = 1, math.min(slotCount or 0, 32) do
-        local slot = FT.Field(slots, index, "table")
-        local row  = selectFields(slot, { quantityRequired = "number", required = "boolean", reagentType = "number" })
-        row.index    = index
-        row.reagents = {}
-        local reagents     = FT.Field(slot, "reagents", "table")
-        local reagentCount = FT.Length(reagents)
-        local field        = "data.reagent_slots." .. index
-        if row.quantityRequired == nil or row.required == nil or row.reagentType == nil then
-            missing[field] = "not_ready"
-        end
-        if not reagentCount then
-            missing[field .. ".reagents"] = "not_ready"
-        elseif reagentCount > 16 then
-            missing[field .. ".reagents"] = "capacity_limit"
-        end
-        for reagent = 1, math.min(reagentCount or 0, 16) do
-            local entry = selectFields(FT.Field(reagents, reagent, "table"), { itemID = "number", currencyID = "number" })
-            if entry.itemID == nil and entry.currencyID == nil then
-                missing[field .. ".reagents." .. reagent] = "not_ready"
-            end
-            table.insert(row.reagents, entry)
-        end
-        table.insert(data.reagent_slots, row)
-    end
-    data.completeness = next(missing) and "partial" or "complete"
-    local id = FT.Emit("recipe.metadata", data, { api = "C_TradeSkillUI.GetRecipeSchematic", method = "metadata_read" },
-        "api_snapshot", related and { related } or {}, missing)
-    if data.output_item_id then
-        FT.RequestItem(data.output_item_id, nil, id)
-    end
-end
-
 FT.OnReset(function()
     sightings  = {}
     merchant   = nil
     offers     = {}
     lastPlayer = nil
     lastRoute  = nil
+    npcCasts   = {}
+    castOrder  = {}
 end)
 
 local function enterWorld(event)
@@ -315,14 +254,68 @@ for _, event in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYE
     end)
 end
 
-FT.On("UNIT_SPELLCAST_SUCCEEDED", function(event, token, _, spellID)
+FT.On("UNIT_SPELLCAST_SUCCEEDED", function(event, token, castGUID, spellID)
     token   = FT.Value(token, "string")
     spellID = FT.Value(spellID, "number")
-    if token == "player" and spellID and spellID > 0 then
-        local id = FT.Emit("spell.succeeded", { spell_id = spellID, actor = "player", target = FT.Unit("target") }, event, "direct_event")
+    if not FT.Profile.supported or not FT.InWorld or not token or not spellID or spellID <= 0 or spellID % 1 ~= 0 then
+        return
+    end
+    if token == "player" then
+        local data    = { spell_id = spellID, actor = "player", target = FT.Unit("target") }
+        local related
+        if FT.GatheringSucceeded then
+            data.gathering_attempt_id, related = FT.GatheringSucceeded(spellID, castGUID)
+        end
+        local id = FT.Emit("spell.succeeded", data, event, "direct_event", related)
         FT.RequestSpell(spellID, id)
+    elseif FT.Profile.npc_spellcasts and (token == "target" or token == "mouseover" or string.match(token, "^nameplate%d+$")) then
+        local npc = FT.Unit(token)
+        if not npc or not npc.creature_id then
+            return
+        end
+        local identity = FT.Value(castGUID, "string")
+        if identity and (identity == "" or #identity > 256) then
+            identity = nil
+        end
+        local prior = identity and npcCasts[identity]
+        if prior and prior.guid == npc.guid and prior.spell_id == spellID then
+            return
+        end
+        local missing = unitMissing(npc, "data.npc.")
+        if not identity then
+            missing["data.cast_identity"] = "not_ready_or_restricted"
+        end
+        local id = FT.Emit("spell.succeeded", {
+            spell_id = spellID, actor = "npc", npc = npc,
+            cast_identity_status = identity and "readable_deduplicated" or "unavailable",
+        }, event, "direct_event", nil, missing)
+        if id and identity then
+            if not npcCasts[identity] then
+                castOrder[#castOrder + 1] = identity
+            end
+            npcCasts[identity] = { guid = npc.guid, spell_id = spellID }
+            if #castOrder > 256 then
+                npcCasts[table.remove(castOrder, 1)] = nil
+            end
+        end
+        if id then
+            FT.RequestSpell(spellID, id)
+        end
     end
 end)
+
+for event, service in pairs({ TRAINER_SHOW = "trainer", BANKFRAME_OPENED = "bank", TAXIMAP_OPENED = "flight_master" }) do
+    FT.On(event, function(name)
+        if not FT.Profile.npc_services or not FT.InWorld then
+            return
+        end
+        local npc = FT.Unit("npc")
+        if npc and npc.creature_id then
+            FT.Emit("interaction.snapshot", { service = service, npc = npc, scope = "opened_npc_service" },
+                name, "api_snapshot", nil, unitMissing(npc, "data.npc."))
+        end
+    end)
+end
 
 FT.On("MERCHANT_SHOW", merchantSnapshot)
 FT.On("MERCHANT_UPDATE", merchantSnapshot)
@@ -332,17 +325,6 @@ FT.On("MERCHANT_CLOSED", function(event)
     end
     merchant = nil
     offers   = {}
-end)
-
-FT.On("TRADE_SKILL_SHOW", professionSnapshot)
-FT.On("TRADE_SKILL_DATA_SOURCE_CHANGED", professionSnapshot)
-FT.On("NEW_RECIPE_LEARNED", recipeLearned)
-FT.On("TRADE_SKILL_ITEM_CRAFTED_RESULT", function(event, source)
-    local data = selectFields(source, { itemID = "number", hyperlink = "string", quantity = "number" })
-    if data.itemID then
-        local id = FT.Emit("craft.result", data, event, "direct_event", nil, { ["data.recipe_id"] = "not_observed" })
-        FT.RequestItem(data.itemID, data.hyperlink, id)
-    end
 end)
 
 FT.On("PLAYER_LOGOUT", function(event)

@@ -39,17 +39,22 @@ class CatalogWatcherTests(unittest.TestCase):
         self.raw = source_bytes(database)
         self.source.write_bytes(self.raw)
 
+    def projected_category(self, document, category):
+        database  = json.loads((self.output_dir / "database.json").read_bytes())
+        projected = {**document, "catalog": database["catalog"], "historyId": database["historyId"]}
+        return watch.category_catalog(projected, category)
+
     def test_first_sync_creates_categories_without_snapshots_and_restarted_sync_skips(self):
         document = self.watcher.sync()
         latest   = self.output_dir / "latest.json"
         files    = {path.name: path.read_bytes() for path in self.output_dir.glob("*.json")}
         modified = latest.stat().st_mtime_ns
-        self.assertEqual(len(files), 8)
+        self.assertEqual(len(files), len(watch.CATEGORIES) + 3)
         self.assertEqual(json.loads(latest.read_text(encoding="utf-8")), document)
         for name, raw in files.items():
             if name in {f"{category}.json" for category in watch.CATEGORIES}:
-                self.assertEqual(json.loads(raw), watch.category_catalog(document, Path(name).stem))
-            else:
+                self.assertEqual(json.loads(raw), self.projected_category(document, Path(name).stem))
+            elif name == "latest.json":
                 self.assertEqual(json.loads(raw), document)
         self.assertIsNone(self.watcher.sync())
         self.assertIsNone(watch.CatalogWatcher(self.source, self.output_dir).sync())
@@ -127,7 +132,7 @@ class CatalogWatcherTests(unittest.TestCase):
         for category in watch.CATEGORIES:
             with self.subTest(category=category):
                 view = json.loads((self.output_dir / f"{category}.json").read_bytes())
-                self.assertEqual(view, watch.category_catalog(document, category))
+                self.assertEqual(view, self.projected_category(document, category))
                 self.assertEqual(view["exportId"], document["exportId"])
                 self.assertEqual(view["source"], document["source"])
                 self.assertEqual(view["contexts"], document["contexts"])
@@ -148,12 +153,13 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(len(items["records"]), 3)
 
     def test_cleared_history_and_new_session_keep_previous_category_evidence(self):
-        first = self.watcher.sync()
+        self.watcher.sync()
+        first = json.loads((self.output_dir / "items.json").read_bytes())
         self.source.write_bytes(source_bytes(make_database()))
         cleared = watch.CatalogWatcher(self.source, self.output_dir).sync()
         self.assertEqual(cleared["summary"]["observationCount"], 0)
         items = json.loads((self.output_dir / "items.json").read_bytes())
-        self.assertEqual(items["entries"], first["catalog"]["items"])
+        self.assertEqual(items["entries"], first["entries"])
         self.assertEqual(len(items["records"]), 1)
         session = make_session(2, [
             ("item.received", {"item_id": 100, "quantity": 3}),
@@ -319,7 +325,7 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(restarted.sync(), document)
         for category in ("items", "quests"):
             self.assertEqual(json.loads((self.output_dir / f"{category}.json").read_bytes()),
-                             watch.category_catalog(document, category))
+                             self.projected_category(document, category))
         self.assertEqual(latest.read_bytes(), before)
         self.assertEqual(latest.stat().st_mtime_ns, modified)
         self.assertIsNone(restarted.sync())
@@ -388,7 +394,7 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(second["summary"]["observationCount"], 2)
         for category in watch.CATEGORIES:
             self.assertEqual(json.loads((self.output_dir / f"{category}.json").read_bytes()),
-                             watch.category_catalog(second, category))
+                             self.projected_category(second, category))
         self.assertEqual(json.loads(latest.read_bytes()), second)
         self.assertIsNone(restarted.sync())
 

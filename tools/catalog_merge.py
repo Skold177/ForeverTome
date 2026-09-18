@@ -63,7 +63,9 @@ def _validate(document: dict) -> None:
                   and document.get("schemaVersion") == 1, "Unsupported category format")
     category = document["category"]
     kinds    = {"spells": "spell", "talents": "talent", "items": "item", "quests": "quest",
-                "monsters": "npc", "npcs": "npc", "gathering": None}
+                "creatures": "npc", "monsters": "npc", "npcs": "npc", "gathering": None,
+                "recipes": "recipe", "maps": "map", "professions": "profession",
+                "currencies": "currency", "objects": "object"}
     saved.require(category in kinds, "Unsupported catalog category")
     contexts = _index(document["contexts"], "id", "context")
     sessions = _index(document["sessions"], "id", "session")
@@ -126,7 +128,7 @@ def _merge_entries(previous: dict, current: dict, records: list[dict]) -> list[d
     builder = CatalogBuilder()
     for row in records:
         builder.add(row["contextId"], {
-            "observation_id": row["id"], "kind": row["type"],
+            "observation_id": row["id"], "session_id": row["sessionId"], "kind": row["type"],
             "data": row["data"], "location": row.get("location"),
         })
     for bucket in builder.finish().values():
@@ -193,7 +195,10 @@ def merge_category(previous: dict | None, current: dict) -> dict:
             saved.require(identity not in sessions
                           or _same(_without(sessions[identity], {"diagnostics"}), _without(session, {"diagnostics"})),
                           f"Conflicting category session: {identity}")
-            sessions[identity] = copy.deepcopy(session)
+            merged = copy.deepcopy(session)
+            if identity in sessions:
+                merged["diagnostics"] = merge_diagnostics(sessions[identity]["diagnostics"], session["diagnostics"])
+            sessions[identity] = merged
         for row in current["records"]:
             identity = row["id"]
             saved.require(identity not in records or _same(_raw_record(records[identity]), _raw_record(row)),
@@ -208,3 +213,19 @@ def merge_category(previous: dict | None, current: dict) -> dict:
         return result
     except (KeyError, TypeError, AttributeError) as error:
         raise saved.ExportError("Invalid category catalog; existing evidence was not replaced") from error
+
+
+def merge_diagnostics(previous: dict, current: dict) -> dict:
+    result = copy.deepcopy(previous)
+    for key, value in current.items():
+        if key not in result:
+            result[key] = copy.deepcopy(value)
+        elif isinstance(value, dict) and isinstance(result[key], dict):
+            result[key] = merge_diagnostics(result[key], value)
+        elif type(value) is int and type(result[key]) is int:
+            result[key] = max(result[key], value)
+        else:
+            saved.require(_same(result[key], value), f"Conflicting session diagnostic: {key}")
+    if isinstance(result.get("counts"), dict) and "distinct" in result:
+        result["distinct"] = max(result["distinct"], len(result["counts"]))
+    return result

@@ -31,9 +31,15 @@
         "talents",
         "items",
         "quests",
+        "creatures",
         "monsters",
         "npcs",
-        "gathering"
+        "gathering",
+        "recipes",
+        "maps",
+        "professions",
+        "currencies",
+        "objects"
       ]
     },
     "exportId": {
@@ -136,6 +142,16 @@
     },
     "selection": {
       "type": "object"
+    },
+    "historyId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "canonicalCategory": {
+      "const": "creatures"
+    },
+    "identityMeaning": {
+      "type": "string"
     }
   },
   "additionalProperties": false,
@@ -382,7 +398,8 @@
           "enum": [
             "herbalism",
             "mining",
-            "skinning"
+            "skinning",
+            "fishing"
           ]
         },
         "spellId": {
@@ -406,7 +423,10 @@
           "type": "object"
         },
         "positionMeaning": {
-          "const": "player_at_successful_gathering_cast"
+          "enum": [
+            "player_at_successful_gathering_cast",
+            "player_at_gathering_attempt"
+          ]
         },
         "resourceIdentity": {
           "const": "not_observed"
@@ -430,6 +450,12 @@
         },
         "location": {
           "type": "object"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "attemptId": {
+          "type": "string"
         }
       },
       "additionalProperties": false

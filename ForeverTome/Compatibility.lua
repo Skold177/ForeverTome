@@ -22,6 +22,7 @@ FT.Profile = {
     item_info = known and "modern" or nil, item_stats = known, item_tooltips = known,
     loot_source_pairs = false, loot_source_probe = known,
     spellbook = known and "modern" or nil, spell_tooltips = known, talents = known and "traits" or nil,
+    professions = known, npc_spellcasts = known, npc_services = known, object_tooltips = known,
     capabilities = {
         quests = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         loot_visibility = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
@@ -34,6 +35,12 @@ FT.Profile = {
         spellbook = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         spell_tooltips = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         talents = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        recipe_catalog = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        storage_inventory = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        npc_spellcasts = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        npc_services = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        gathering_attempts = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
+        object_tooltips = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         loot_source_mapping = {
             status = "wf_unverified", enabled = known, evidence = "installed_client_binary",
             reason = "guarded_source_probe",

@@ -16,12 +16,15 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import export_saved_variables as saved
-from tools.build_catalog import FORMAT, SCHEMA_VERSION, build_catalog, catalog_export_id, validate_catalog
-from tools.catalog_merge import merge_category, validate_history
+from tools.build_catalog import FORMAT, SCHEMA_VERSION, TRANSACTION_KINDS, build_catalog, validate_catalog
+from tools.catalog_history import FORMAT as HISTORY_FORMAT, merge_history, validate_archive, validate_evidence
+from tools.catalog_merge import _validate as validate_category
 
 
 CATEGORY_FORMAT = "forevertome.catalog-category"
-CATEGORIES      = ("spells", "talents", "items", "quests", "monsters", "npcs", "gathering")
+DATABASE_FORMAT = "forevertome.database"
+CATEGORIES      = ("spells", "talents", "items", "quests", "creatures", "monsters", "npcs", "gathering",
+                   "recipes", "maps", "professions", "currencies", "objects")
 
 
 def category_catalog(document: dict, category: str) -> dict:
@@ -30,8 +33,10 @@ def category_catalog(document: dict, category: str) -> dict:
         from tools.catalog_gathering import gathering_entries
 
         entries = gathering_entries(document)
+    elif category in ("creatures", "npcs", "monsters"):
+        entries = document["catalog"].get("creatures", document["catalog"].get("npcs", []))
     else:
-        entries = document["catalog"]["npcs" if category == "monsters" else category]
+        entries = document["catalog"].get(category, [])
     if category == "monsters":
         selected = []
         for entity in entries:
@@ -65,6 +70,11 @@ def category_catalog(document: dict, category: str) -> dict:
         "records": copy.deepcopy(records), "sessions": copy.deepcopy(sessions),
         "semantics": copy.deepcopy(document["semantics"]),
     }
+    if "historyId" in document:
+        result["historyId"] = document["historyId"]
+    if category in ("creatures", "npcs", "monsters"):
+        result["canonicalCategory"] = "creatures"
+        result["identityMeaning"]   = "Import each creature key once; npcs is an alias and monsters is an observed-reaction subset."
     if category == "monsters":
         result["selection"] = {
             "method": "observed_reaction", "reactions": [1, 2, 3, 4],
@@ -95,14 +105,17 @@ def atomic_write(path: Path, encoded: bytes) -> tuple:
 
 class CatalogWatcher:
     def __init__(self, source: Path, output_dir: Path):
-        self.source            = source.resolve()
-        self.output_dir        = output_dir.resolve()
-        self.latest            = self.output_dir / "latest.json"
-        self.outputs           = {category: self.output_dir / f"{category}.json" for category in CATEGORIES}
-        self.outputs["latest"] = self.latest
-        self.signature         = None
-        self.output_signatures = {}
-        self.digest            = None
+        self.source              = source.resolve()
+        self.output_dir          = output_dir.resolve()
+        self.latest              = self.output_dir / "latest.json"
+        self.outputs             = {category: self.output_dir / f"{category}.json" for category in CATEGORIES}
+        self.outputs["history"]  = self.output_dir / "history.json"
+        self.outputs["database"] = self.output_dir / "database.json"
+        self.outputs["latest"]   = self.latest
+        self.signature           = None
+        self.output_signatures   = {}
+        self.legacy_signatures   = {}
+        self.digest              = None
         for path in self.outputs.values():
             saved.require(self.source != path, "Source and output paths must differ")
             saved.require(not path.is_symlink(), "Output must not be a symbolic link")
@@ -118,7 +131,8 @@ class CatalogWatcher:
         return document["source"]["sha256"], document["exportId"]
 
     def read_catalog(self, path: Path, category: str | None = None) -> dict | None:
-        expected_format = CATEGORY_FORMAT if category else FORMAT
+        expected_format = {"history": HISTORY_FORMAT, "database": DATABASE_FORMAT}.get(
+            category, CATEGORY_FORMAT if category else FORMAT)
         saved.require(not path.is_symlink(), f"Output {path.name} must not be a symbolic link")
         if not path.exists():
             return None
@@ -131,11 +145,25 @@ class CatalogWatcher:
         saved.require(isinstance(document, dict) and document.get("format") == expected_format
                       and document.get("schemaVersion") == SCHEMA_VERSION,
                       f"Refusing to replace an unrelated {path.name}")
-        if category:
+        if category in CATEGORIES:
             saved.require(document.get("category") == category, f"Refusing to replace an unrelated {path.name} category")
         source = document.get("source")
         saved.require(isinstance(source, dict) and isinstance(source.get("sha256"), str)
                       and isinstance(document.get("exportId"), str), f"Invalid {path.name} catalog source")
+        try:
+            if category == "history":
+                validate_archive(document)
+            elif category == "database":
+                saved.require(all(field in document for field in (
+                    "historyId", "contexts", "sessions", "records", "catalog", "relationships", "coverage", "lootStatistics")),
+                    "Invalid database projection")
+                validate_evidence(document)
+            elif category:
+                validate_category(document)
+            else:
+                validate_catalog(document)
+        except (KeyError, TypeError, AttributeError) as error:
+            raise saved.ExportError(f"Invalid existing {path.name}; existing evidence was not replaced") from error
         return document
 
     def legacy_catalogs(self, latest: dict | None):
@@ -146,13 +174,13 @@ class CatalogWatcher:
                 validate_catalog(document)
             except (KeyError, TypeError, AttributeError) as error:
                 raise saved.ExportError(f"Invalid legacy catalog {path.name}") from error
-            yield document
+            yield path.name, document
         if latest is not None:
             try:
                 validate_catalog(latest)
             except (KeyError, TypeError, AttributeError) as error:
                 raise saved.ExportError("Invalid legacy latest.json") from error
-            yield latest
+            yield "latest.json", latest
 
     def output_file_signature(self, path: Path) -> tuple | None:
         saved.require(not path.is_symlink(), f"Output {path.name} must not be a symbolic link")
@@ -163,59 +191,70 @@ class CatalogWatcher:
         return stat.st_size, stat.st_mtime_ns, stat.st_ino
 
     def sync(self) -> dict | None:
-        stat       = self.source.stat()
-        signature  = (stat.st_size, stat.st_mtime_ns, stat.st_ino)
-        signatures = {name: self.output_file_signature(path) for name, path in self.outputs.items()}
-        if signature == self.signature and all(signatures.values()) and signatures == self.output_signatures:
+        stat              = self.source.stat()
+        signature         = (stat.st_size, stat.st_mtime_ns, stat.st_ino)
+        signatures        = {name: self.output_file_signature(path) for name, path in self.outputs.items()}
+        legacy_signatures = {path.name: self.output_file_signature(path)
+                             for path in sorted(self.output_dir.glob("catalog-*.json"))}
+        if (signature == self.signature and all(signatures.values()) and signatures == self.output_signatures
+                and legacy_signatures == self.legacy_signatures):
             return None
         previous         = {name: self.read_catalog(path, None if name == "latest" else name)
                             for name, path in self.outputs.items()}
-        existing         = {name: (view["source"]["sha256"], view["exportId"]) if view else None
-                            for name, view in previous.items()}
         database, digest = saved.read_stable(self.source)
-        identity         = (digest, catalog_export_id(digest))
-        if all(value == identity for value in existing.values()):
-            self.signature         = signature
-            self.output_signatures = signatures
-            self.digest            = digest
-            return None
-        document  = build_catalog(database, digest)
-        encoded   = (json.dumps(document, ensure_ascii=False, sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
-        identity  = (digest, document["exportId"])
-        migrating = [category for category in CATEGORIES if previous[category] is None
-                     or previous[category].get("generatorVersion") != document["generatorVersion"]]
-        if migrating:
-            for legacy in self.legacy_catalogs(previous["latest"]):
-                validate_history((view for name, view in previous.items() if name != "latest" and view), legacy)
-                for category in migrating:
-                    previous[category] = merge_category(previous[category], category_catalog(legacy, category))
-        validate_history((view for name, view in previous.items() if name != "latest" and view), document)
-        categories = {category: merge_category(previous[category], category_catalog(document, category))
-                      for category in CATEGORIES if category != "monsters"}
-        npcs       = categories["npcs"]
-        monsters   = category_catalog({
-            **document, "contexts": npcs["contexts"], "sessions": npcs["sessions"],
-            "catalog": {"npcs": npcs["entries"]}, "transactions": [], "observations": npcs["records"],
-        }, "monsters")
-        categories["monsters"] = merge_category(previous["monsters"], monsters)
-        views = {category: (json.dumps(categories[category], ensure_ascii=False, sort_keys=True,
-                                      allow_nan=False, indent=2) + "\n").encode("utf-8")
-                 for category in CATEGORIES}
+        document         = build_catalog(database, digest)
+        sources          = list(self.legacy_catalogs(previous["latest"]))
+        if previous["database"] is not None:
+            sources.append(("database.json", previous["database"]))
+        sources.extend((f"{category}.json", previous[category]) for category in CATEGORIES if previous[category])
+        archive = merge_history(previous["history"], document, sources)
+        self.check_unchanged(signature, signatures, legacy_signatures)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        changed = previous["history"] != archive
+        if changed:
+            content = (json.dumps(archive, ensure_ascii=False, sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
+            signatures["history"] = atomic_write(self.outputs["history"], content)
+        from tools.catalog_database import database_projection
+
+        projection = database_projection(archive["contexts"], archive["sessions"], archive["records"])
+        cumulative = {
+            **document, "historyId": archive["historyId"], "contexts": archive["contexts"],
+            "sessions": archive["sessions"], "catalog": projection["catalog"],
+            "transactions": [row for row in archive["records"] if row["type"] in TRANSACTION_KINDS],
+            "observations": [row for row in archive["records"] if row["type"] not in TRANSACTION_KINDS],
+        }
+        database_view = {
+            "format": DATABASE_FORMAT, "schemaVersion": SCHEMA_VERSION,
+            "generatorVersion": document["generatorVersion"], "exportId": document["exportId"],
+            "source": document["source"], "historyId": archive["historyId"], "contexts": archive["contexts"],
+            "sessions": archive["sessions"], "records": archive["records"],
+            **projection, "semantics": document["semantics"],
+        }
+        views = {"database": database_view}
+        views.update({category: category_catalog(cumulative, category) for category in CATEGORIES})
+        views["latest"] = document
+        encoded = {name: (json.dumps(view, ensure_ascii=False, sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
+                   for name, view in views.items()}
+        self.check_unchanged(signature, signatures, legacy_signatures)
+        for name, content in encoded.items():
+            if previous[name] != views[name]:
+                signatures[name] = atomic_write(self.outputs[name], content)
+                changed = True
+        self.signature         = signature
+        self.output_signatures = signatures
+        self.legacy_signatures = legacy_signatures
+        self.digest            = digest
+        return document if changed else None
+
+    def check_unchanged(self, signature: tuple, signatures: dict, legacy_signatures: dict) -> None:
         current = self.source.stat()
         saved.require(signature == (current.st_size, current.st_mtime_ns, current.st_ino),
                       "Input changed during catalog conversion; waiting for the next save check")
         saved.require(signatures == {name: self.output_file_signature(path) for name, path in self.outputs.items()},
                       "Output changed during catalog conversion; waiting for the next save check")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        for category, content in views.items():
-            if existing[category] != identity:
-                signatures[category] = atomic_write(self.outputs[category], content)
-        if existing["latest"] != identity:
-            signatures["latest"] = atomic_write(self.latest, encoded)
-        self.signature         = signature
-        self.output_signatures = signatures
-        self.digest            = digest
-        return document
+        saved.require(legacy_signatures == {path.name: self.output_file_signature(path)
+                                           for path in sorted(self.output_dir.glob("catalog-*.json"))},
+                      "Legacy output changed during catalog conversion; waiting for the next save check")
 
 
 def main(arguments: list[str] | None = None) -> int:

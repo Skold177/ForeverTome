@@ -31,6 +31,10 @@ commit of Skold177/ForeverTome each time you click Install / update addon.
 Keep this application to fetch future addon updates; no replacement installer is
 needed for addon updates. The setup and application version identify the companion
 build, while the installed addon version comes from the downloaded addon.
+Use exporter 0.3.0 or newer to export the additional observation types recorded by
+addon 0.3.0. Older companions can still install the latest addon, but their older
+parsers cannot export its new observation types. Exporter feature updates require
+an updated companion build.
 It updates ForeverTome addon files and preserves SavedVariables and other addons.
 Restart WoW after a first installation; reload after updating an enabled addon.
 
@@ -44,14 +48,29 @@ a Start menu shortcut, with an optional desktop shortcut. Addon installation
 still uses the application's Install / update addon button. Uninstalling the companion
 preserves the WoW addon, recordings, exported JSON, and application settings.
 
-Outputs: spells.json, talents.json, items.json, quests.json, monsters.json,
-npcs.json, gathering.json, and latest.json. Categories accumulate evidence by ID
-across saves and retain exported history after addon clearing or app restarts.
+Outputs (16 files): spells.json, talents.json, items.json, quests.json,
+creatures.json, monsters.json, npcs.json, gathering.json, recipes.json, maps.json,
+professions.json, currencies.json, objects.json, history.json, database.json,
+and latest.json. Categories accumulate evidence by ID across saves.
+creatures.json uses canonical creature identities; npcs.json is an alias and
+monsters.json is an observed-reaction subset. Import their shared keys once.
+The window shows 11 canonical category counts without duplicate creature totals.
+
+history.json preserves every available observation and session diagnostic before
+the other cumulative files are generated. database.json provides canonical
+catalogs, relationships, coverage, and loot evidence from the retained history.
+Deleted category files and database.json can be rebuilt from history.json.
+These files retain exported evidence after addon clearing or app restarts.
 Export successfully before clearing the addon, and keep the same output folder.
-latest.json and the window summary describe the current save.
-No new dated snapshots are created. The first export after upgrading backfills
-category history from existing snapshots and latest.json without changing snapshots.
-Keep backups of the category files to preserve accumulated history.
+latest.json describes the current save. The window separates current-save totals
+from retained observations and sessions, and shows recorded gaps and scan counts.
+Overall game database completeness remains unknown.
+
+No new dated snapshots are created. Existing snapshots, latest.json, and category
+evidence are imported into the archive without changing original snapshots.
+Migration records its available sources; previously discarded data cannot be recovered.
+Keep backups of the export folder, especially history.json. Readers of multiple
+cumulative files must require matching exportId and historyId values.
 The application reads SavedVariables without modifying or executing it.
 Nothing is uploaded. Use only one exporter for each output folder.
 

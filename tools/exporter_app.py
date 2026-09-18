@@ -20,7 +20,7 @@ from types import SimpleNamespace
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools.desktop_exporter import ExporterController, load_settings, save_settings
+from tools.desktop_exporter import DISPLAY_CATEGORIES, ExporterController, load_settings, save_settings
 from tools import addon_installer
 from tools.watch_catalog import CATEGORIES
 
@@ -56,10 +56,11 @@ class ExporterApp:
         self.detail        = tk.StringVar(value="Choose your recording, then export once or watch for new saves.")
         self.saved_at      = tk.StringVar(value="No save checked yet")
         self.totals        = tk.StringVar(value="Your catalog will appear here after an export.")
-        self.counts        = {name: tk.StringVar(value="—") for name in CATEGORIES}
+        self.coverage      = tk.StringVar(value="Coverage details will appear after an export.")
+        self.counts        = {name: tk.StringVar(value="—") for name in DISPLAY_CATEGORIES}
         root.title(APP_NAME)
-        root.geometry("900x850")
-        root.minsize(790, 820)
+        root.geometry("900x900")
+        root.minsize(790, 870)
         root.configure(background=COLORS["page"])
         root.protocol("WM_DELETE_WINDOW", self.close)
         self._style()
@@ -79,7 +80,7 @@ class ExporterApp:
         style.configure("Muted.TLabel", foreground=COLORS["muted"])
         style.configure("CardMuted.TLabel", background=COLORS["card"], foreground=COLORS["muted"], font=("Segoe UI", 9))
         style.configure("Title.TLabel", font=("Segoe UI", 12, "bold"), background=COLORS["card"])
-        style.configure("Count.TLabel", font=("Segoe UI", 22, "bold"), background=COLORS["card"])
+        style.configure("Count.TLabel", font=("Segoe UI", 18, "bold"), background=COLORS["card"])
         style.configure("TEntry", padding=8, fieldbackground=COLORS["card"], foreground=COLORS["ink"])
         style.configure("TNotebook", background=COLORS["page"], borderwidth=0)
         style.configure("TNotebook.Tab", padding=(20, 10), font=("Segoe UI", 10))
@@ -93,7 +94,7 @@ class ExporterApp:
                   foreground=[("disabled", "#f6f4f0")])
 
     def _layout(self):
-        header = tk.Frame(self.root, background=COLORS["header"], padx=28, pady=22)
+        header = tk.Frame(self.root, background=COLORS["header"], padx=28, pady=16)
         header.pack(fill="x")
         tk.Label(header, text="FOREVERTOME", background=COLORS["header"], foreground="#d9b572",
                  font=("Segoe UI", 10, "bold")).pack(anchor="w")
@@ -104,10 +105,10 @@ class ExporterApp:
 
         self.tabs = ttk.Notebook(self.root)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=(8, 0))
-        body = ttk.Frame(self.tabs, padding=(18, 16))
+        body = ttk.Frame(self.tabs, padding=(18, 12))
         self.tabs.add(body, text="Export recordings")
         self._addon_layout()
-        paths = ttk.Frame(body, style="Card.TFrame", padding=18)
+        paths = ttk.Frame(body, style="Card.TFrame", padding=14)
         paths.pack(fill="x")
         paths.columnconfigure(0, weight=1)
         self._path_row(paths, "WoW recording", self.source, self._browse_source, 0)
@@ -116,7 +117,7 @@ class ExporterApp:
                   style="CardMuted.TLabel").grid(row=4, column=0, columnspan=2, sticky="w", pady=(12, 0))
 
         actions = ttk.Frame(body)
-        actions.pack(fill="x", pady=(16, 16))
+        actions.pack(fill="x", pady=(12, 12))
         self.watch_button = ttk.Button(actions, text="Start watching", style="Primary.TButton", command=self._watch)
         self.watch_button.pack(side="left")
         self.once_button = ttk.Button(actions, text="Export now", command=self._once)
@@ -125,28 +126,33 @@ class ExporterApp:
         self.stop_button.pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Open export folder", command=self._open_output).pack(side="right")
 
-        status = ttk.Frame(body, style="Card.TFrame", padding=18)
+        status = ttk.Frame(body, style="Card.TFrame", padding=14)
         status.pack(fill="x")
         self.status_label = ttk.Label(status, textvariable=self.status, style="Title.TLabel")
         self.status_label.pack(anchor="w")
         ttk.Label(status, textvariable=self.detail, style="CardMuted.TLabel", wraplength=750,
                   justify="left").pack(anchor="w", pady=(5, 12))
         ttk.Label(status, textvariable=self.saved_at, style="CardMuted.TLabel").pack(anchor="w")
-        ttk.Label(status, textvariable=self.totals, style="Card.TLabel").pack(anchor="w", pady=(5, 15))
+        ttk.Label(status, textvariable=self.totals, style="Card.TLabel").pack(anchor="w", pady=(5, 12))
         counts = ttk.Frame(status, style="Card.TFrame")
         counts.pack(fill="x")
-        for column, category in enumerate(CATEGORIES):
+        for column in range(4):
             counts.columnconfigure(column, weight=1, uniform="category")
-            ttk.Label(counts, textvariable=self.counts[category], style="Count.TLabel").grid(row=0, column=column, sticky="w")
-            label = "NPCs" if category == "npcs" else category.capitalize()
-            ttk.Label(counts, text=label, style="CardMuted.TLabel").grid(row=1, column=column, sticky="w")
+        for index, category in enumerate(DISPLAY_CATEGORIES):
+            row, column = divmod(index, 4)
+            cell        = ttk.Frame(counts, style="Card.TFrame")
+            cell.grid(row=row, column=column, sticky="ew", padx=(0, 10), pady=3)
+            ttk.Label(cell, textvariable=self.counts[category], style="Count.TLabel").pack(side="left")
+            ttk.Label(cell, text=category.capitalize(), style="CardMuted.TLabel").pack(side="left", padx=(7, 0))
+        ttk.Label(status, textvariable=self.coverage, style="CardMuted.TLabel", wraplength=750,
+                  justify="left").pack(anchor="w", pady=(10, 0))
 
-        ttk.Label(body, text="Recent activity", style="Muted.TLabel").pack(anchor="w", pady=(16, 5))
+        ttk.Label(body, text="Recent activity", style="Muted.TLabel").pack(anchor="w", pady=(10, 5))
         self.activity = tk.Text(body, height=3, wrap="word", background=COLORS["page"], foreground=COLORS["muted"],
                                 font=("Segoe UI", 9), relief="flat", borderwidth=0, state="disabled", takefocus=False)
         self.activity.pack(fill="both", expand=True)
         ttk.Label(body, text="Only runs while this window is open. Files stay on your computer.",
-                  style="Muted.TLabel").pack(anchor="w", pady=(12, 0))
+                  style="Muted.TLabel").pack(anchor="w", pady=(8, 0))
 
     def _addon_layout(self):
         body = ttk.Frame(self.tabs, padding=(18, 20))
@@ -374,12 +380,16 @@ class ExporterApp:
                 self.detail.set("Save in WoW with /reload or logout. Your JSON files will update here." if self.watching
                                 else "Your catalogs are ready in the export folder.")
                 self.saved_at.set("WoW save: " + event.get("saved_at", "Unknown"))
-                summary = event["summary"]
-                self.totals.set(f"{summary['observationCount']:,} observations  ·  {summary['transactionCount']:,} transactions")
+                summary  = event["summary"]
+                retained = event["historySummary"]
+                coverage = event["coverageSummary"]
+                self.totals.set(f"Current save: {summary['observationCount']:,} observations  ·  {summary['transactionCount']:,} transactions\n"
+                                f"Retained: {retained['observationCount']:,} observations across {retained['sessionCount']:,} sessions")
+                self.coverage.set(f"{coverage['gapCount']:,} recorded gaps  ·  {coverage['scanCount']:,} scans  ·  Overall completeness unknown")
                 for category, variable in self.counts.items():
                     count = event.get("categoryCounts", {}).get(category)
                     variable.set(f"{count:,}" if isinstance(count, int) else "—")
-                self._log("Updated all seven catalogs." if kind == "exported" else "Catalogs already match this save.")
+                self._log("Updated the history, database, and category files." if kind == "exported" else "Catalogs already match this save.")
             elif kind == "error":
                 self._show_error(event["message"])
             elif kind == "stopped" and not self.closing:
@@ -486,6 +496,14 @@ def smoke_test(report: Path) -> int:
                                    for name in CATEGORIES]
                         assert {packet["category"] for packet in packets} == set(CATEGORIES)
                         assert len({packet["exportId"] for packet in packets}) == 1
+                        history  = json.loads((folder / "exports" / "history.json").read_text(encoding="utf-8"))
+                        database = json.loads((folder / "exports" / "database.json").read_text(encoding="utf-8"))
+                        assert {packet["historyId"] for packet in packets} == {history["historyId"], database["historyId"]}
+                        assert database["records"] == history["records"]
+                        assert database["exportId"] == history["exportId"] == app.last_result["exportId"]
+                        assert set(app.counts) == set(DISPLAY_CATEGORIES)
+                        assert "npcs" not in app.counts and "monsters" not in app.counts and "creatures" in app.counts
+                        assert "Retained:" in app.totals.get()
                         assert source.read_bytes() == raw
                         state["phase"] = "watch"
                         app._begin(True)
@@ -530,6 +548,7 @@ def smoke_test(report: Path) -> int:
             assert state["phase"] == "close" and app.closed and not app.controller.running
             assert app.addon_thread is not None and not app.addon_thread.is_alive()
             result = {"ok": True, "tkVersion": tk.TkVersion, "categories": list(CATEGORIES), "stopAfterError": True,
+                      "canonicalCounts": list(DISPLAY_CATEGORIES), "historyDatabaseConsistent": True,
                       "addonInstall": True, "addonUpdateWithoutRebuild": True,
                       "sourceUnchanged": True, "closedWithoutWorker": True, "frozen": bool(getattr(sys, "frozen", False))}
     except Exception as error:

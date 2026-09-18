@@ -107,7 +107,7 @@ class GateIntegrityTests(unittest.TestCase):
 
     def test_mutant_disabled_required_suite_cannot_report_success(self):
         def mutate(root):
-            replace_once(root / "tests" / "run.lua", '{ "core", "quests", "loot", "world", "spells", "talents" }', '{ "core", "loot", "world", "spells", "talents" }')
+            replace_once(root / "tests" / "run.lua", '"quests", ', '')
 
         process = self.mutant(mutate)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)

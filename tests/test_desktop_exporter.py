@@ -69,11 +69,20 @@ class DesktopExporterTests(unittest.TestCase):
         self.assertFalse(controller.running)
 
     def write_catalog(self):
-        document = {"exportId": "test-export", "summary": {"observationCount": 12, "transactionCount": 3}}
+        document   = {"exportId": "test-export", "summary": {"observationCount": 12, "transactionCount": 3}}
+        history_id = "test-history"
         self.output_dir.mkdir(exist_ok=True)
         (self.output_dir / "latest.json").write_text(json.dumps(document), encoding="utf-8")
+        history  = {"exportId": document["exportId"], "historyId": history_id,
+                    "summary": {"observationCount": 24, "sessionCount": 2, "kindCounts": {"coverage.gap": 1}}}
+        database = {"exportId": document["exportId"], "historyId": history_id,
+                    "coverage": {"recordCount": 24, "sessionCount": 2, "scans": [{}, {}],
+                                 "missingReasonCounts": {"unavailable": 3}}}
+        (self.output_dir / "history.json").write_text(json.dumps(history), encoding="utf-8")
+        (self.output_dir / "database.json").write_text(json.dumps(database), encoding="utf-8")
         for index, category in enumerate(desktop.CATEGORIES):
-            view = {"exportId": document["exportId"], "category": category, "entries": [{}] * index}
+            view = {"exportId": document["exportId"], "historyId": history_id,
+                    "category": category, "entries": [{}] * index}
             (self.output_dir / f"{category}.json").write_text(json.dumps(view), encoding="utf-8")
         return document
 
@@ -86,6 +95,8 @@ class DesktopExporterTests(unittest.TestCase):
         self.assertEqual(result["summary"]["observationCount"], 1)
         self.assertEqual(result["categoryCounts"]["items"], 1)
         self.assertEqual(set(result["categoryCounts"]), set(desktop.CATEGORIES))
+        self.assertEqual(result["historySummary"]["observationCount"], 1)
+        self.assertEqual(set(result["canonicalCategoryCounts"]), set(desktop.DISPLAY_CATEGORIES))
         self.assertEqual(result["output_dir"], str(self.output_dir.resolve()))
         self.assertIn("T", result["saved_at"])
         self.assertEqual(self.source.read_bytes(), original)
@@ -100,7 +111,34 @@ class DesktopExporterTests(unittest.TestCase):
         self.finish(controller)
         self.assertEqual(result["summary"], document["summary"])
         self.assertEqual(result["exportId"], document["exportId"])
-        self.assertEqual(result["categoryCounts"], dict(zip(desktop.CATEGORIES, range(7))))
+        self.assertEqual(result["categoryCounts"], dict(zip(desktop.CATEGORIES, range(len(desktop.CATEGORIES)))))
+        self.assertEqual(result["historySummary"]["observationCount"], 24)
+        self.assertEqual(result["coverageSummary"], {"gapCount": 1, "scanCount": 2, "missingFieldCount": 3})
+
+    def test_retained_counts_survive_clearing_and_display_counts_exclude_creature_aliases(self):
+        self.source.write_bytes(source_bytes(make_database(make_session(1, [
+            ("item.metadata", {"item_id": 100}),
+            ("unit.sighting", {"creature_id": 300, "reaction": 2}),
+            ("coverage.gap", {"reason": "paused"}),
+        ]))))
+        controller = self.controller()
+        controller.start(self.source, self.output_dir, watch=False)
+        self.wait_event(controller, "exported")
+        self.finish(controller)
+        self.source.write_bytes(source_bytes(make_database()))
+        controller.start(self.source, self.output_dir, watch=False)
+        result = self.wait_event(controller, "exported")
+        self.finish(controller)
+        self.assertEqual(result["summary"]["observationCount"], 0)
+        self.assertEqual(result["historySummary"]["observationCount"], 3)
+        self.assertEqual(result["historySummary"]["sessionCount"], 1)
+        self.assertEqual(result["coverageSummary"]["gapCount"], 1)
+        for category in ("creatures", "npcs", "monsters"):
+            self.assertEqual(result["categoryCounts"][category], 1)
+        counts = result["canonicalCategoryCounts"]
+        self.assertNotIn("npcs", counts)
+        self.assertNotIn("monsters", counts)
+        self.assertEqual(sum(counts.values()), 2)
 
     def test_stop_during_conversion_is_nonblocking_and_finishes_only_current_work(self):
         entered    = threading.Event()
@@ -244,6 +282,35 @@ class DesktopExporterTests(unittest.TestCase):
                         events.append(controller.events.get_nowait())
                     self.assertEqual([event["type"] for event in events], ["working", "error", "stopped"])
                     self.assertIn(field, events[1]["message"])
+
+    def test_current_summary_rejects_partial_history_or_database_generation(self):
+        for name, field in (("history", "exportId"), ("database", "exportId"),
+                            ("database", "historyId"), ("items", "historyId")):
+            with self.subTest(name=name, field=field):
+                self.write_catalog()
+                path = self.output_dir / f"{name}.json"
+                view = json.loads(path.read_bytes())
+                view[field] = "different-generation"
+                path.write_text(json.dumps(view), encoding="utf-8")
+                controller = self.controller(lambda: None)
+                controller.start(self.source, self.output_dir, watch=False)
+                error = self.wait_event(controller, "error")
+                self.finish(controller)
+                self.assertIn("do not match", error["message"])
+
+    def test_invalid_retained_counts_are_not_displayed(self):
+        for value in (None, True, -1, "24"):
+            with self.subTest(value=value):
+                self.write_catalog()
+                path = self.output_dir / "history.json"
+                view = json.loads(path.read_bytes())
+                view["summary"]["observationCount"] = value
+                path.write_text(json.dumps(view), encoding="utf-8")
+                controller = self.controller(lambda: None)
+                controller.start(self.source, self.output_dir, watch=False)
+                error = self.wait_event(controller, "error")
+                self.finish(controller)
+                self.assertIn("observationCount", error["message"])
 
     def test_invalid_intervals_cannot_start_busy_loop(self):
         for interval in (0, -1, float("nan"), float("inf"), "2"):

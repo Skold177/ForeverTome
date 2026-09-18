@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ForeverTome cumulative content database v1",
+  "type": "object",
+  "required": ["format", "schemaVersion", "generatorVersion", "exportId", "source", "historyId", "contexts", "sessions", "records", "catalog", "relationships", "coverage", "lootStatistics"],
+  "properties": {
+    "format": {"const": "forevertome.database"},
+    "schemaVersion": {"const": 1},
+    "generatorVersion": {"type": "string"},
+    "exportId": {"type": "string"},
+    "historyId": {"type": "string"},
+    "source": {"type": "object"},
+    "contexts": {"type": "array", "items": {"type": "object"}},
+    "sessions": {"type": "array", "items": {"type": "object"}},
+    "records": {"type": "array", "items": {"$ref": "website-catalog-v1.schema.json#/$defs/record"}},
+    "catalog": {
+      "type": "object",
+      "required": ["items", "quests", "creatures", "objects", "spells", "talents", "recipes", "maps", "professions", "currencies"],
+      "properties": {
+        "items": {"$ref": "#/$defs/entities"},
+        "quests": {"$ref": "#/$defs/entities"},
+        "creatures": {"$ref": "#/$defs/entities"},
+        "objects": {"$ref": "#/$defs/entities"},
+        "spells": {"$ref": "#/$defs/entities"},
+        "talents": {"$ref": "#/$defs/entities"},
+        "recipes": {"$ref": "#/$defs/entities"},
+        "maps": {"$ref": "#/$defs/entities"},
+        "professions": {"$ref": "#/$defs/entities"},
+        "currencies": {"$ref": "#/$defs/entities"}
+      },
+      "additionalProperties": false
+    },
+    "relationships": {"type": "array", "items": {"$ref": "#/$defs/relationship"}},
+    "coverage": {
+      "type": "object",
+      "required": ["recordCount", "sessionCount", "kindCounts", "entityCounts", "missingReasonCounts", "scans", "boundaries", "sessionDiagnostics", "gameDatabaseCompleteness", "semantics"],
+      "properties": {
+        "recordCount": {"type": "integer", "minimum": 0},
+        "sessionCount": {"type": "integer", "minimum": 0},
+        "kindCounts": {"type": "object"},
+        "entityCounts": {"type": "object"},
+        "missingReasonCounts": {"type": "object"},
+        "scans": {"type": "array", "items": {"type": "object"}},
+        "boundaries": {"type": "array", "items": {"type": "object"}},
+        "sessionDiagnostics": {"type": "array", "items": {"type": "object"}},
+        "gameDatabaseCompleteness": {"type": "null"},
+        "semantics": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "lootStatistics": {
+      "type": "object",
+      "required": ["windowCount", "windows", "eligibleDenominator", "dropRates", "status", "requirements", "semantics"],
+      "properties": {
+        "windowCount": {"type": "integer", "minimum": 0},
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "sessionId", "lootSessionId", "contextId", "sourceIds", "slotCount", "slotRevisionCount", "eligibleDenominator", "dropRate", "status", "reasons", "slots"],
+            "properties": {
+              "id": {"type": "string"},
+              "sessionId": {"type": "string"},
+              "lootSessionId": {"type": "string"},
+              "contextId": {"type": "string"},
+              "sourceIds": {"$ref": "#/$defs/sourceIds"},
+              "slotCount": {"type": "integer", "minimum": 0},
+              "slotRevisionCount": {"type": "integer", "minimum": 0},
+              "eligibleDenominator": {"type": "null"},
+              "dropRate": {"type": "null"},
+              "status": {"const": "not_estimable"},
+              "reasons": {"type": "array", "items": {"type": "string"}},
+              "slots": {"type": "array", "items": {"type": "object"}}
+            },
+            "additionalProperties": false
+          }
+        },
+        "eligibleDenominator": {"type": "null"},
+        "dropRates": {"type": "array", "maxItems": 0},
+        "status": {"const": "not_estimable"},
+        "requirements": {"type": "array", "items": {"type": "string"}},
+        "semantics": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "semantics": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sourceIds": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "observed": {
+      "type": "object",
+      "required": ["sourceId", "sessionId", "sequence"],
+      "properties": {
+        "sourceId": {"type": "string"},
+        "sessionId": {"type": "string"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "observedAt": {"type": "string"},
+        "observedAtUnix": {"type": "number"}
+      },
+      "additionalProperties": false
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "allOf": [{"$ref": "website-catalog-v1.schema.json#/$defs/entity"}],
+        "required": ["canonicalKind", "contentKey", "identityScope", "sourceCount", "firstObserved", "lastObserved", "observationOrder", "fieldCoverage", "multipleValueFields"],
+        "properties": {
+          "canonicalKind": {"enum": ["item", "quest", "creature", "object", "spell", "talent", "recipe", "map", "profession", "currency"]},
+          "contentKey": {"type": "string", "pattern": "^content:"},
+          "identityScope": {"enum": ["content", "session"]},
+          "observationOrder": {"enum": ["server_time", "archive_session_order"]},
+          "sourceCount": {"type": "integer", "minimum": 1},
+          "firstObserved": {"$ref": "#/$defs/observed"},
+          "lastObserved": {"$ref": "#/$defs/observed"},
+          "fieldCoverage": {"type": "object", "additionalProperties": {"$ref": "#/$defs/fieldCoverage"}},
+          "multipleValueFields": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "fieldCoverage": {
+      "type": "object",
+      "required": ["statuses", "candidates", "missing", "hasMultipleValues"],
+      "properties": {
+        "statuses": {"type": "array", "minItems": 1, "items": {"enum": ["captured", "unavailable", "restricted", "not_applicable", "not_scanned"]}},
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value", "sourceIds", "factIds"],
+            "properties": {"value": {}, "sourceIds": {"$ref": "#/$defs/sourceIds"}, "factIds": {"$ref": "#/$defs/sourceIds"}},
+            "additionalProperties": false
+          }
+        },
+        "missing": {"type": "array", "items": {"type": "object", "required": ["reason", "status", "sourceIds"]}},
+        "hasMultipleValues": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "relationship": {
+      "type": "object",
+      "required": ["id", "contextId", "subject", "predicate", "object", "status", "attributes", "sourceIds", "sourceCount", "evidence"],
+      "properties": {
+        "id": {"type": "string"},
+        "contextId": {"type": "string"},
+        "subject": {"type": "string"},
+        "predicate": {"type": "string"},
+        "object": {"type": "string"},
+        "status": {"enum": ["observed", "candidate", "validated"]},
+        "attributes": {"type": "object"},
+        "sourceIds": {"$ref": "#/$defs/sourceIds"},
+        "sourceCount": {"type": "integer", "minimum": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["sourceId", "subjectPath", "objectPath"]}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

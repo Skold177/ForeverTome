@@ -60,6 +60,25 @@ class GatheringCatalogTests(unittest.TestCase):
         document["transactions"][0]["type"] = "spell.learned"
         self.assertEqual(gathering_entries(document), [])
 
+    def test_fishing_casts_exclude_training_and_skill_bonuses(self):
+        entries = gathering_entries(self.catalog([7620, 7731, 7732, 18248, 13615, 24303, 1229271]))
+        self.assertEqual(len(entries), 4)
+        self.assertTrue(all(entry["profession"] == "fishing" and entry["outcome"] == "succeeded" for entry in entries))
+
+    def test_failed_and_interrupted_attempts_keep_outcome_and_identity(self):
+        for outcome, event in (("failed", "UNIT_SPELLCAST_FAILED"), ("interrupted", "UNIT_SPELLCAST_INTERRUPTED")):
+            document = self.catalog([2575])
+            record   = document["transactions"][0]
+            record["type"] = "gathering.attempt"
+            record["data"].update(outcome=outcome, attempt_id="attempt-1")
+            record["capture"]["event"] = event
+            entry = gathering_entries(document)[0]
+            self.assertEqual(entry["outcome"], outcome)
+            self.assertEqual(entry["attemptId"], "attempt-1")
+            self.assertEqual(entry["positionMeaning"], "player_at_gathering_attempt")
+            record["data"]["outcome"] = "started"
+            self.assertEqual(gathering_entries(document), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,40 @@ local function quest(h)
     return state
 end
 
+local function profession(h, count)
+    local state = { profession_id = 164, source_counter = 1, ids = {}, name = "Known recipe", reads = 0 }
+    for index = 1, count do
+        state.ids[index] = 1000 + index
+    end
+    h.env.C_TradeSkillUI.GetBaseProfessionInfo = function()
+        return { professionID = state.profession_id, professionName = "Smithing", sourceCounter = state.source_counter,
+            skillLevel = 15, maxSkillLevel = 75 }
+    end
+    h.env.C_TradeSkillUI.GetProfessionInfoByRecipeID = function()
+        return { professionID = state.profession_id, professionName = "Smithing" }
+    end
+    h.env.C_TradeSkillUI.GetAllRecipeIDs = function()
+        return state.ids
+    end
+    h.env.C_TradeSkillUI.GetRecipeInfo = function(id)
+        state.reads = state.reads + 1
+        return { recipeID = id, name = state.name, learned = true, categoryID = 1, skillLineAbilityID = id + 2000,
+            qualityItemIDs = { 8111, 8112 } }
+    end
+    h.env.C_TradeSkillUI.GetRecipeSchematic = function(id, isRecraft)
+        assert(isRecraft == false)
+        return { recipeID = id, outputItemID = 8111, quantityMin = 1, quantityMax = 2, recipeType = 1, icon = 100,
+            reagentSlotSchematics = { { quantityRequired = 2, required = true, reagentType = 1,
+                reagents = { { itemID = 8112 }, { currencyID = 23 } },
+                variableQuantities = { { reagent = { itemID = 8112 }, quantity = 3 } },
+                slotInfo = { mcrSlotID = 9, requiredSkillRank = 5, slotText = "Reagent" } } } }
+    end
+    h.env.C_TradeSkillUI.GetRecipeRequirements = function()
+        return { { name = "Anvil", met = false, type = 0 } }
+    end
+    return state
+end
+
 return {
     { name = "zone changes retain accepted quest runs and queued objective comparisons", run = function(Host)
         local h     = Host.new()
@@ -390,6 +424,260 @@ return {
         assert(recipe.missing_fields["data.reagent_slots"] == "capacity_limit")
         assert(recipe.missing_fields["data.reagent_slots.1.reagents"] == "capacity_limit")
         assert(recipe.missing_fields["data.reagent_slots.2.reagents"] == "not_ready")
+        h:assertHealthy()
+    end },
+    { name = "profession baseline catalogs already known recipes with direct ownership and requirements", run = function(Host)
+        local h = Host.new()
+        profession(h, 3)
+        h:start()
+        assert(#h:records("recipe.metadata") == 0)
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        local scan   = h:last("recipe.scan")
+        local recipe = h:last("recipe.metadata")
+        assert(#h:records("recipe.metadata") == 3 and #h:records("recipe.learned") == 0)
+        assert(scan.data.returned_count == 3 and scan.data.processed_count == 3)
+        assert(scan.data.completeness == "complete" and scan.data.enumeration_complete == true)
+        assert(scan.data.enumeration_contract == "unverified_runtime_probe" and scan.data.profession_coverage == "unverified")
+        assert(recipe.data.profession_id == 164 and recipe.data.quantity_max == 2)
+        assert(recipe.data.reagent_slots[1].reagents[2].currencyID == 23)
+        assert(recipe.data.reagent_slots[1].variable_quantities[1].quantity == 3)
+        assert(recipe.data.requirements[1].met == false and recipe.data.quality_item_ids[2] == 8112)
+        assert(#scan.related_observation_ids == 3)
+        h:assertHealthy()
+    end },
+    { name = "profession rescans deduplicate metadata while manual scans retain scope evidence", run = function(Host)
+        local h     = Host.new()
+        local state = profession(h, 2)
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        h:event("TRADE_SKILL_DATA_SOURCE_CHANGED")
+        h:advance(1)
+        assert(#h:records("recipe.metadata") == 2 and #h:records("recipe.scan") == 1)
+        h.FT.Dispatch("FT_CATALOG")
+        h:advance(1)
+        assert(#h:records("recipe.metadata") == 2 and #h:records("recipe.scan") == 2)
+        assert(h:last("recipe.scan").capture.method == "manual_catalog")
+        state.name = "Updated recipe"
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        assert(#h:records("recipe.metadata") == 4 and h:last("recipe.metadata").data.name == state.name)
+        h:assertHealthy()
+    end },
+    { name = "filtered recipe enumeration never claims the entire profession", run = function(Host)
+        local h     = Host.new()
+        local state = profession(h, 2)
+        h.env.C_TradeSkillUI.GetAllRecipeIDs = nil
+        h.env.C_TradeSkillUI.GetFilteredRecipeIDs = function()
+            return state.ids
+        end
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        local scan = h:last("recipe.scan")
+        assert(scan.data.scope == "currently_viewed_profession_filtered")
+        assert(scan.data.profession_coverage == "filtered" and scan.data.enumeration_complete == true)
+        assert(scan.data.enumeration_method == "C_TradeSkillUI.GetFilteredRecipeIDs")
+        h:assertHealthy()
+    end },
+    { name = "missing recipe output and unavailable enumeration remain explicit gaps", run = function(Host)
+        local h = Host.new()
+        profession(h, 1)
+        h.env.C_TradeSkillUI.GetRecipeSchematic = function(id)
+            return { recipeID = id, reagentSlotSchematics = {} }
+        end
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        local recipe = h:last("recipe.metadata")
+        local scan   = h:last("recipe.scan")
+        assert(recipe.data.output_item_id == nil and recipe.data.output_status == "not_observed")
+        assert(recipe.missing_fields["data.output_item_id"] == "not_observed")
+        assert(recipe.missing_fields["data.quantity_min"] == "not_ready")
+        assert(scan.data.partial_recipe_count == 1 and scan.data.completeness == "partial")
+        h.env.C_TradeSkillUI.GetAllRecipeIDs = nil
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        scan = h:last("recipe.scan")
+        assert(scan.data.enumeration_complete == false and scan.data.returned_count == nil)
+        assert(scan.missing_fields["data.recipe_ids"] == "not_ready_or_unsupported")
+        h:assertHealthy()
+    end },
+    { name = "recipe enumeration is bounded and source closure preserves incomplete scan status", run = function(Host)
+        local h = Host.new()
+        profession(h, 2050)
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(0.3)
+        assert(#h:records("recipe.metadata") == 8)
+        h:event("TRADE_SKILL_CLOSE")
+        h:advance(2)
+        local scan = h:last("recipe.scan")
+        assert(scan.data.returned_count == 2050 and scan.data.enumerated_count == 2048)
+        assert(scan.data.processed_count == 8 and #h:records("recipe.metadata") == 8)
+        assert(scan.data.enumeration_complete == false and scan.data.completeness == "partial")
+        assert(scan.missing_fields["data.recipe_ids"] == "capacity_limit")
+        assert(scan.missing_fields["data.scan"] == "data_source_closed_or_changing")
+        h:assertHealthy()
+    end },
+    { name = "clearing during profession scan cancels stale work and resets metadata deduplication", run = function(Host)
+        local h = Host.new()
+        profession(h, 17)
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(0.3)
+        assert(#h:records("recipe.metadata") == 8)
+        assert(h.FT.Clear())
+        h:advance(2)
+        assert(#h:records("recipe.metadata") == 0 and #h:records("recipe.scan") == 0)
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        assert(#h:records("recipe.metadata") == 17)
+        assert(h:last("recipe.scan").data.processed_count == 17)
+        h:assertHealthy()
+    end },
+    { name = "profession source changes cannot mix recipes from different views", run = function(Host)
+        local h     = Host.new()
+        local state = profession(h, 17)
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(0.3)
+        state.profession_id = 171
+        state.source_counter = 2
+        state.ids = { 4000 }
+        h:event("TRADE_SKILL_DATA_SOURCE_CHANGED")
+        h:advance(1)
+        local scans = h:records("recipe.scan")
+        assert(#scans == 2 and scans[1].data.processed_count == 8)
+        assert(scans[1].data.completeness == "partial" and scans[2].data.profession_id == 171)
+        assert(#h:records("recipe.metadata") == 9 and h:last("recipe.metadata").data.profession_id == 171)
+        h:assertHealthy()
+    end },
+    { name = "learning and crafting retain direct evidence without guessed recipe attribution", run = function(Host)
+        local h = Host.new()
+        profession(h, 1)
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        h:event("NEW_RECIPE_LEARNED", 1001, 2, 1000)
+        local learned = h:last("recipe.learned")
+        local recipe  = h:last("recipe.metadata")
+        assert(learned.data.recipe_level == 2 and learned.data.base_recipe_id == 1000)
+        assert(recipe.related_observation_ids[1] == learned.observation_id)
+        h:event("TRADE_SKILL_ITEM_CRAFTED_RESULT", { itemID = 8111, quantity = 2, operationID = 35, recipeID = 1001 })
+        local craft = h:last("craft.result")
+        assert(craft.data.operationID == 35 and craft.data.quantity == 2)
+        assert(craft.data.recipe_id == nil and craft.data.recipeID == nil)
+        assert(craft.missing_fields["data.recipe_id"] == "not_observed")
+        h:assertHealthy()
+    end },
+    { name = "recipe identity mismatches never attach metadata from another recipe", run = function(Host)
+        local h = Host.new()
+        profession(h, 1)
+        h.env.C_TradeSkillUI.GetRecipeInfo = function()
+            return { recipeID = 9999, name = "Wrong recipe", learned = true }
+        end
+        h.env.C_TradeSkillUI.GetRecipeSchematic = function()
+            return { recipeID = 9999, outputItemID = 5000, quantityMin = 1, quantityMax = 1, reagentSlotSchematics = {} }
+        end
+        h:start()
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        local recipe = h:last("recipe.metadata")
+        assert(recipe.data.recipe_id == 1001 and recipe.data.name == nil and recipe.data.output_item_id == nil)
+        assert(recipe.missing_fields["data.info"] == "identity_mismatch")
+        assert(recipe.missing_fields["data.schematic"] == "identity_mismatch")
+        assert(h:last("recipe.scan").data.completeness == "partial")
+        h:assertHealthy()
+    end },
+    { name = "profession scan stops cleanly when recording capacity resets collectors", run = function(Host)
+        local h     = Host.new()
+        local state = profession(h, 17)
+        h:start()
+        h.FT.LIMITS.records = h.FT.Export().record_count + 2
+        h:event("TRADE_SKILL_SHOW")
+        h:advance(1)
+        assert(h.FT.Status().blocked == "capacity_limit")
+        assert(h.FT.ProfessionStatus().scanning == false)
+        local reads = state.reads
+        h:advance(1)
+        assert(state.reads == reads and reads < 17)
+        h:assertHealthy()
+    end },
+    { name = "readable NPC casts identify the caster and deduplicate shared unit tokens", run = function(Host)
+        local h = Host.new()
+        creature(h)
+        h.env.C_Spell.GetSpellInfo = function(id)
+            return { name = "Observed ability", spellID = id }
+        end
+        h:start()
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", "npc-cast-1", 5678)
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "nameplate1", "npc-cast-1", 5678)
+        h:advance(0.2)
+        local cast = h:last("spell.succeeded")
+        assert(#h:records("spell.succeeded") == 1 and cast.data.actor == "npc")
+        assert(cast.data.npc.creature_id == 7001 and cast.data.target == nil)
+        assert(cast.data.cast_guid == nil and cast.data.cast_identity_status == "readable_deduplicated")
+        assert(h:last("spell.metadata").related_observation_ids[1] == cast.observation_id)
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", "npc-cast-2", 5678)
+        assert(#h:records("spell.succeeded") == 2)
+        assert(h.FT.Clear())
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", "npc-cast-1", 5678)
+        assert(#h:records("spell.succeeded") == 1)
+        h:assertHealthy()
+    end },
+    { name = "restricted NPC casts and player identities never become NPC abilities", run = function(Host)
+        local h = Host.new()
+        creature(h)
+        h:start()
+        h:event("UNIT_SPELLCAST_SUCCEEDED", { secret = true }, "private", 5678)
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", "private", { secret = true })
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", "private", 1.5)
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "party1", "private", 5678)
+        assert(#h:records("spell.succeeded") == 0)
+        h.env.UnitGUID = function()
+            return "Player-123-Private"
+        end
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", "private", 5678)
+        assert(#h:records("spell.succeeded") == 0)
+        creature(h)
+        h:event("UNIT_SPELLCAST_SUCCEEDED", "target", { secret = true }, 5678)
+        local cast = h:last("spell.succeeded")
+        assert(cast.data.actor == "npc" and cast.data.cast_identity_status == "unavailable")
+        assert(cast.missing_fields["data.cast_identity"] == "not_ready_or_restricted")
+        h:assertHealthy()
+    end },
+    { name = "NPC service roles require actual opened interactions and an identified NPC", run = function(Host)
+        local h = Host.new()
+        creature(h)
+        h:start()
+        for event, service in pairs({ TRAINER_SHOW = "trainer", BANKFRAME_OPENED = "bank", TAXIMAP_OPENED = "flight_master" }) do
+            h:event(event)
+            local record = h:last("interaction.snapshot")
+            assert(record.data.service == service and record.data.npc.creature_id == 7001)
+            assert(record.capture.event == event and record.data.scope == "opened_npc_service")
+        end
+        local count = #h:records("interaction.snapshot")
+        h.env.UnitGUID = function()
+            return nil
+        end
+        h:event("TRAINER_SHOW")
+        assert(#h:records("interaction.snapshot") == count)
+        h:assertHealthy()
+    end },
+    { name = "NPC descriptors report unreadable fields and unavailable native positions", run = function(Host)
+        local h = Host.new()
+        creature(h)
+        h:start()
+        h:event("NAME_PLATE_UNIT_ADDED", "nameplate1")
+        local sighting = h:last("unit.sighting")
+        assert(sighting.data.name == "Forest Sentinel" and sighting.data.level == 6)
+        for _, key in ipairs({ "classification", "creature_type", "reaction", "max_health" }) do
+            assert(sighting.missing_fields["data." .. key] == "not_ready_or_restricted")
+        end
+        assert(sighting.data.entity_position == nil)
+        assert(sighting.missing_fields["data.entity_position"] == "native_position_unavailable")
         h:assertHealthy()
     end },
 }

@@ -1,27 +1,28 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ForeverTome website catalog v1",
+  "title": "ForeverTome cumulative observation history v1",
   "type": "object",
   "required": [
     "format",
     "schemaVersion",
+    "generatorVersion",
     "exportId",
     "source",
+    "historyId",
     "contexts",
     "sessions",
-    "catalog",
-    "transactions",
-    "observations",
+    "records",
+    "imports",
+    "retention",
     "summary",
-    "semantics",
-    "generatorVersion"
+    "semantics"
   ],
   "properties": {
-    "format": {
-      "const": "forevertome.website-catalog"
-    },
     "schemaVersion": {
       "const": 1
+    },
+    "generatorVersion": {
+      "type": "string"
     },
     "exportId": {
       "type": "string",
@@ -52,6 +53,10 @@
         }
       },
       "additionalProperties": false
+    },
+    "historyId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     },
     "contexts": {
       "type": "array",
@@ -103,128 +108,11 @@
         "additionalProperties": false
       }
     },
-    "catalog": {
-      "type": "object",
-      "required": [
-        "items",
-        "quests",
-        "npcs",
-        "spells",
-        "talents",
-        "recipes",
-        "maps",
-        "professions",
-        "currencies"
-      ],
-      "properties": {
-        "items": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "quests": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "npcs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "objects": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "spells": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "talents": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "recipes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "maps": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "professions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        },
-        "currencies": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/entity"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "transactions": {
+    "records": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/record"
       }
-    },
-    "observations": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/record"
-      }
-    },
-    "summary": {
-      "type": "object",
-      "required": [
-        "observationCount",
-        "transactionCount",
-        "kindCounts",
-        "transactionCounts",
-        "catalogCounts",
-        "receiptChannels"
-      ],
-      "properties": {
-        "observationCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "transactionCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "kindCounts": {
-          "$ref": "#/$defs/counts"
-        },
-        "transactionCounts": {
-          "$ref": "#/$defs/counts"
-        },
-        "catalogCounts": {
-          "$ref": "#/$defs/counts"
-        },
-        "receiptChannels": {
-          "$ref": "#/$defs/counts"
-        }
-      },
-      "additionalProperties": false
     },
     "semantics": {
       "type": "object",
@@ -232,8 +120,120 @@
         "type": "string"
       }
     },
-    "generatorVersion": {
-      "type": "string"
+    "format": {
+      "const": "forevertome.catalog-history"
+    },
+    "imports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "exportId",
+          "source",
+          "recordCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "kind": {
+            "enum": [
+              "saved_variables",
+              "legacy_snapshot",
+              "legacy_category",
+              "database_projection"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "exportId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "source": {
+            "type": "object",
+            "required": [
+              "sha256",
+              "schemaVersion",
+              "synthetic",
+              "observationCount"
+            ],
+            "properties": {
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "schemaVersion": {
+                "const": 1
+              },
+              "synthetic": {
+                "type": "boolean"
+              },
+              "observationCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "recordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "retention": {
+      "type": "object",
+      "required": [
+        "scope",
+        "priorCoverage",
+        "legacyMigration",
+        "meaning"
+      ],
+      "properties": {
+        "scope": {
+          "const": "all_available_observations"
+        },
+        "priorCoverage": {
+          "const": "unknown"
+        },
+        "legacyMigration": {
+          "type": "boolean"
+        },
+        "meaning": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "observationCount",
+        "sessionCount",
+        "kindCounts"
+      ],
+      "properties": {
+        "observationCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kindCounts": {
+          "$ref": "#/$defs/counts"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
@@ -445,6 +445,98 @@
           }
         },
         "channel": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "gathering": {
+      "type": "object",
+      "required": [
+        "id",
+        "contextId",
+        "sessionId",
+        "profession",
+        "spellId",
+        "elapsedSeconds",
+        "sourceIds",
+        "evidence",
+        "classification",
+        "positionMeaning",
+        "resourceIdentity",
+        "receivedItems"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "profession": {
+          "enum": [
+            "herbalism",
+            "mining",
+            "skinning",
+            "fishing"
+          ]
+        },
+        "spellId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "elapsedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "classification": {
+          "type": "object"
+        },
+        "positionMeaning": {
+          "enum": [
+            "player_at_successful_gathering_cast",
+            "player_at_gathering_attempt"
+          ]
+        },
+        "resourceIdentity": {
+          "const": "not_observed"
+        },
+        "receivedItems": {
+          "const": "not_attributed"
+        },
+        "spellKey": {
+          "type": "string"
+        },
+        "spellName": {
+          "type": "string"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "observedAtUnix": {
+          "type": "number",
+          "minimum": 0
+        },
+        "location": {
+          "type": "object"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "attemptId": {
           "type": "string"
         }
       },

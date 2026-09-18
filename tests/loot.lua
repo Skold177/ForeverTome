@@ -129,7 +129,7 @@ return {
             })
             host:assertEqual(metadata[1].data.tooltip_status, "available")
             host:assertEqual(metadata[1].data.icon_id, 134400)
-            host:assertEqual(metadata[1].missing_fields, {})
+            host:assertEqual(metadata[1].missing_fields, { gems = "unsupported", item_spell = "unsupported" })
             host:assertHealthy()
         end,
     },
@@ -648,6 +648,117 @@ return {
             end
             host:event("LOOT_SLOT_CHANGED", 1)
             host:assertEqual(host:last("loot.visible").missing_fields.source_mapping, "unsupported")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "object loot labels require a matching object tooltip GUID and keep source mapping unverified",
+        run = function(Host)
+            local host, state = configured(Host)
+            local guid        = "GameObject-0-1-2-3-5001-0000000001"
+            local tooltip     = { type = 4, guid = guid, id = 9999, lines = {
+                { type = 0, leftText = "Weathered Chest" }, { type = 0, leftText = "Locked", rightText = "75" },
+            } }
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+            host.env.GetLootSourceInfo = function()
+                return guid, 1
+            end
+            host.env.C_TooltipInfo = { GetWorldCursor = function()
+                return tooltip
+            end }
+            host:event("LOOT_OPENED", false, false)
+            local visible = host:last("loot.visible")
+            local source  = visible.data.sources[1]
+            assert(source.observed_label == "Weathered Chest" and source.observed_label_source == "tooltip_lines[1].left_text")
+            assert(source.tooltip_status == "available" and source.tooltip_identity_method == "exact_guid_match")
+            assert(source.tooltip_method == "C_TooltipInfo.GetWorldCursor" and source.tooltip_guid_field == "guid")
+            assert(source.tooltip_lines[2].right_text == "75" and source.tooltip_type == 4)
+            assert(source.name == nil and source.object_id == nil and source.object_type == nil)
+            assert(visible.data.source_mapping_status == "unverified" and visible.data.source_status == "unverified")
+            tooltip.lines[1].leftText = "Another object"
+            assert(source.observed_label == "Weathered Chest")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "object loot never borrows labels from another cursor identity or unreadable tooltip",
+        run = function(Host)
+            local guid = "GameObject-0-1-2-3-5001-0000000001"
+            local cases = {
+                { type = 4, guid = "GameObject-0-1-2-3-5002-0000000002" },
+                { type = 4, id = 5001 },
+                { type = 4, guid = { secret = true } },
+                { type = 4, guid = guid, secret = true },
+                { type = 2, guid = guid },
+                { type = 1, worldLootObjectGUID = guid },
+                { type = 4, guid = guid, worldLootObjectGUID = "GameObject-0-1-2-3-5002-0000000002" },
+            }
+            for _, tooltip in ipairs(cases) do
+                local host, state = configured(Host)
+                state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+                tooltip.lines = { { leftText = "Do not attach this title" } }
+                host.env.GetLootSourceInfo = function()
+                    return guid, 1
+                end
+                host.env.C_TooltipInfo = { GetWorldCursor = function()
+                    return tooltip
+                end }
+                host:event("LOOT_OPENED", false, false)
+                local visible = host:last("loot.visible")
+                local source  = visible.data.sources[1]
+                assert(source.observed_label == nil and source.tooltip_lines == nil)
+                assert(source.tooltip_status == "unavailable")
+                assert(visible.missing_fields["data.sources.1.observed_label"] ~= nil)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "object tooltip lines stay bounded and unreadable titles remain unknown",
+        run = function(Host)
+            local host, state = configured(Host)
+            local guid        = "GameObject-0-1-2-3-5001-0000000001"
+            local lines       = {}
+            for index = 1, 65 do
+                lines[index] = { type = 0, leftText = "Readable object detail" }
+            end
+            lines[1].leftText = { secret = true }
+            lines[2].rightText = string.rep("x", 1025)
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+            host.env.GetLootSourceInfo = function()
+                return guid, 1
+            end
+            host.env.C_TooltipInfo = { GetWorldCursor = function()
+                return { type = 4, worldLootObjectGUID = guid, lines = lines }
+            end }
+            host:event("LOOT_OPENED", false, false)
+            local visible = host:last("loot.visible")
+            local source  = visible.data.sources[1]
+            assert(source.tooltip_guid_field == "worldLootObjectGUID" and source.tooltip_status == "partial")
+            assert(#source.tooltip_lines == 64 and source.tooltip_lines[2].right_text == nil)
+            assert(source.observed_label == nil and source.tooltip_lines[1].left_text == nil)
+            assert(visible.missing_fields["data.sources.1.tooltip_lines"] == "capacity_limit")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "object tooltip enrichment is optional and guarded by the client profile",
+        run = function(Host)
+            local host, state = configured(Host)
+            local guid        = "GameObject-0-1-2-3-5001-0000000001"
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+            host.env.GetLootSourceInfo = function()
+                return guid, 1
+            end
+            host.FT.Profile.object_tooltips = false
+            host.env.C_TooltipInfo = { GetWorldCursor = function()
+                error("disabled object tooltip must not be read")
+            end }
+            host:event("LOOT_OPENED", false, false)
+            local visible = host:last("loot.visible")
+            assert(visible.data.sources[1].source_guid == guid)
+            assert(visible.data.sources[1].tooltip_status == "unsupported")
+            assert(visible.missing_fields["data.sources.1.tooltip_lines"] == "unsupported")
             host:assertHealthy()
         end,
     },

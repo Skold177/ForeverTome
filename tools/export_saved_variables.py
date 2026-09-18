@@ -37,6 +37,7 @@ ARRAY_FIELDS = frozenset({
     "added_spell_ids", "removed_spell_ids", "power_costs", "treeIDs", "nodeIDs", "entryIDs",
     "entryIDsWithCommittedRanks", "visibleEdges", "groupIDs", "conditionIDs", "gates", "tooltip_lines",
     "subTreeSelectionNodeIDs", "tree_hash", "tree_ids", "nodes", "entry_rank_increases", "committed_entry_ids",
+    "container_ids", "recipe_ids", "quality_item_ids", "requirements", "variable_quantities", "gems",
 })
 SUPPORTED_KINDS = frozenset({
     "session.started", "session.ended", "coverage.gap", "player.snapshot", "player.state",
@@ -50,6 +51,7 @@ SUPPORTED_KINDS = frozenset({
     "quest.removed", "quest.metadata", "quest.reward_received", "interaction.snapshot", "item.metadata_unresolved",
     "item.metadata", "item.received", "loot.visible", "loot.opened", "loot.snapshot",
     "loot.slot_unavailable", "loot.slot_cleared", "loot.closed", "inventory.snapshot", "inventory.delta",
+    "inventory.storage", "recipe.scan", "gathering.attempt",
 })
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*")
 NUMBER     = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")

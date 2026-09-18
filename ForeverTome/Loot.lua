@@ -206,6 +206,39 @@ local function readItem(itemID, link)
     local itemLink     = link or "item:" .. tostring(itemID)
     local statsPending = itemStats(data, missing, itemLink)
     local linesPending = itemTooltip(data, missing, itemLink)
+    local spellMethod  = itemAPI("GetItemSpell")
+    local ok, spellName, spellID = FT.TryCall(spellMethod, itemLink)
+    data.item_spell_id     = ok and number(spellID, 1, 2147483647) or nil
+    data.item_spell_name   = ok and FT.Value(spellName, "string") or nil
+    data.item_spell_method = spellMethod
+    data.item_spell_status = data.item_spell_id and "available" or "no_spell_or_unavailable"
+    if not ok then
+        data.item_spell_status = FT.Resolve(spellMethod) and "unavailable" or "unsupported"
+        missing.item_spell     = data.item_spell_status
+    end
+    data.gems        = {}
+    data.gems_method = itemAPI("GetItemGem")
+    data.gems_status = FT.Resolve(data.gems_method) and "no_gems_or_unavailable" or "unsupported"
+    if data.gems_status ~= "unsupported" then
+        for index = 1, 3 do
+            local readable, gemName, gemLink = FT.TryCall(data.gems_method, itemLink, index)
+            local gemID = readable and FT.ItemID(gemLink) or nil
+            if gemID then
+                data.gems[#data.gems + 1] = {
+                    socket_index = index, item_id = gemID, link = gemLink,
+                    name = FT.Value(gemName, "string"),
+                }
+            elseif not readable then
+                missing["gems." .. index] = "not_ready_or_restricted"
+                data.gems_status         = "partial"
+            end
+        end
+        if #data.gems > 0 and data.gems_status ~= "partial" then
+            data.gems_status = "available"
+        end
+    else
+        missing.gems = "unsupported"
+    end
     return data, missing, statsPending or linesPending
 end
 
@@ -465,6 +498,95 @@ local function readSources(slot, quantity)
     return sources, "mapped", matches
 end
 
+local function objectTooltips(sources, missing)
+    local hasObject = false
+    for _, source in ipairs(sources) do
+        hasObject = hasObject or source.entity_kind == "GameObject"
+    end
+    if not hasObject then
+        return
+    end
+    local method                  = "C_TooltipInfo.GetWorldCursor"
+    local supported               = FT.Profile.supported and FT.Profile.object_tooltips and FT.Resolve(method) ~= nil
+    local raw                     = supported and FT.Call(method) or nil
+    local tooltipType             = number(FT.Field(raw, "type", "number"), 0, 255)
+    local guid, badGUID           = tooltipField(raw, "guid", "string")
+    local worldGUID, badWorldGUID = tooltipField(raw, "worldLootObjectGUID", "string")
+    local lines                   = FT.Field(raw, "lines", "table")
+    local count                   = FT.Length(lines)
+    local remainingLines          = 64
+    local remainingText           = 32768
+    for sourceIndex, source in ipairs(sources) do
+        if source.entity_kind == "GameObject" then
+            local path   = "data.sources." .. sourceIndex
+            local reason = nil
+            source.tooltip_method = method
+            if not supported then
+                reason = "unsupported"
+            elseif not FT.Value(raw, "table") then
+                reason = "not_ready_or_restricted"
+            elseif tooltipType ~= 4 then
+                reason = "not_object_tooltip"
+            elseif badGUID or badWorldGUID or not guid and not worldGUID then
+                reason = "identity_unavailable"
+            elseif guid and guid ~= source.source_guid or worldGUID and worldGUID ~= source.source_guid then
+                reason = "identity_mismatch"
+            elseif not count then
+                reason = "not_ready_or_restricted"
+            else
+                source.tooltip_identity_method = "exact_guid_match"
+                source.tooltip_guid_field      = guid and "guid" or "worldLootObjectGUID"
+                source.tooltip_type            = tooltipType
+                source.tooltip_lines           = {}
+                local limit = math.min(count, remainingLines)
+                if count > limit then
+                    reason = "capacity_limit"
+                end
+                for index = 1, limit do
+                    remainingLines = remainingLines - 1
+                    local line            = FT.Field(lines, index, "table")
+                    local left, badLeft   = tooltipField(line, "leftText", "string")
+                    local right, badRight = tooltipField(line, "rightText", "string")
+                    local kind, badKind   = tooltipField(line, "type", "number")
+                    local lineType        = number(kind, 0, 255)
+                    if badLeft or badRight or badKind or kind ~= nil and lineType == nil then
+                        reason = reason or "invalid_or_unreadable"
+                    end
+                    if left and #left > remainingText then
+                        left   = nil
+                        reason = reason or "capacity_limit"
+                    end
+                    remainingText = remainingText - (left and #left or 0)
+                    if right and #right > remainingText then
+                        right  = nil
+                        reason = reason or "capacity_limit"
+                    end
+                    remainingText = remainingText - (right and #right or 0)
+                    if left ~= nil or right ~= nil or lineType ~= nil then
+                        source.tooltip_lines[#source.tooltip_lines + 1] = {
+                            index = index, left_text = left, right_text = right, type = lineType,
+                        }
+                    else
+                        reason = reason or "invalid_or_unreadable"
+                    end
+                    if index == 1 and left and left ~= "" then
+                        source.observed_label        = left
+                        source.observed_label_source = "tooltip_lines[1].left_text"
+                    end
+                end
+            end
+            source.tooltip_status = reason and (source.tooltip_lines and "partial" or "unavailable") or "available"
+            if reason == "unsupported" then
+                source.tooltip_status = "unsupported"
+            end
+            missing[path .. ".tooltip_lines"] = reason
+            if not source.observed_label then
+                missing[path .. ".observed_label"] = reason or "not_observed"
+            end
+        end
+    end
+end
+
 local function readLootSlot(slot)
     local slotType = number(FT.Call("GetLootSlotType", slot), 0, 100)
     local link     = FT.Value(FT.Call("GetLootSlotLink", slot), "string")
@@ -493,6 +615,7 @@ local function readLootSlot(slot)
     end
     local sources, sourceState, sourceMatches, sourceReason = readSources(slot, quantity)
     local missing = {}
+    objectTooltips(sources, missing)
     if sourceReason then
         missing.source_mapping = sourceReason
         if #sources == 0 then

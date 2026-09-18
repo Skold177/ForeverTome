@@ -10,6 +10,8 @@ In the application's **Install / update addon** tab, choose a detected WoW Forev
 
 The same installed companion fetches future addon versions automatically when you click **Install / update addon**, even if its installer was built before that addon version existed. You do not need another installer for addon updates. Updating the companion's export features still requires a new companion build. Its Windows/setup version identifies that build and may stay older than an addon installed later.
 
+Addon 0.3.0 introduces observation kinds that older exporters cannot read. Use companion 0.3.0 for those recordings and the expanded database exports. The addon update button does not update the companion itself.
+
 The application updates ForeverTome's addon payload in the selected client's `Interface/AddOns/ForeverTome` directory. SavedVariables and other addons are preserved. After a first installation, restart WoW and enable the addon. For an update to an already enabled addon, use `/reload`.
 
 Uninstall **ForeverTome Exporter** through Windows Settings to remove the companion and its shortcuts. Uninstalling the companion preserves the WoW addon, SavedVariables, exported catalogs, and application settings.
@@ -22,7 +24,7 @@ Uninstall **ForeverTome Exporter** through Windows Settings to remove the compan
 4. Select **Export now** for a single conversion, or **Start watching** to check for changes every two seconds while the application is open.
 5. Use `/reload` or normal logout in WoW whenever you want the addon to save its observations to disk. The application cannot see observations still held in game memory.
 
-The window shows conversion status, cumulative category counts, and errors. Observation and transaction totals describe the current save. **Open export folder** opens the destination in File Explorer. Your chosen source file and output folder are remembered locally for the next launch; opening the application does not automatically start watching.
+The window shows conversion status, cumulative category counts, and errors. Current-save observations and transactions are shown separately from retained observations and sessions. The category grid counts creatures once; compatibility NPC and monster files do not add duplicate counters. Recorded gaps and scan counts describe the retained evidence, while overall game database completeness remains unknown. **Open export folder** opens the destination in File Explorer. Your chosen source file and output folder are remembered locally for the next launch; opening the application does not automatically start watching.
 
 **Stop** stops further checks. Closing the window stops watching and exits the application after any export or addon operation already in progress finishes safely. The window stays visible while it finishes. There is no tray mode, background service, or Windows startup task. Run only one exporter for each output folder, including any command-line watcher previously started there.
 
@@ -30,13 +32,15 @@ Exporting reads SavedVariables through the restricted data parser without execut
 
 ## Output files
 
-The destination contains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`. Each category accumulates evidence across saves, including entries, supporting records, sessions, and contexts. New evidence is merged by ID, identical observations are kept once, and conflicting content under the same observation ID is rejected. Exported history remains after the addon is cleared or the application restarts, provided you keep using the same output folder. Export successfully before clearing the addon.
+The destination contains 13 category files: `spells.json`, `talents.json`, `items.json`, `quests.json`, `creatures.json`, `monsters.json`, `npcs.json`, `gathering.json`, `recipes.json`, `maps.json`, `professions.json`, `currencies.json`, and `objects.json`. Categories contain accumulated entities and supporting evidence. `creatures.json` holds the canonical creature identities; `npcs.json` is a compatibility alias and `monsters.json` selects creatures with observed hostile or neutral reactions. Import their shared keys once.
 
-`latest.json` contains the complete current save; the window's summary also describes that save. The application no longer creates dated `catalog-*.json` snapshots. On the first export with generator version 0.2.5, existing dated snapshots and `latest.json` are merged into the category history. Original snapshots remain untouched. Export once after upgrading, even if the saved recording has not changed.
+`history.json` preserves every available observation and session diagnostic, including records that have no category entity. It is saved before projections are generated. `database.json` provides canonical catalogs, relationships, field coverage, and loot evidence from that history. Identical observation IDs are kept once, conflicting evidence is rejected, and replaying an older save cannot lower retained diagnostic counts. History survives addon clearing and application restarts when you keep using the same output folder. Export successfully before clearing the addon.
 
-JSON files use two-space indentation and line breaks for readability. Repeated checks skip unchanged saves, and incomplete saves are retried while watching. Keep backups of the category files: they retain history that may no longer exist in SavedVariables.
+`latest.json` contains the complete current save. The application imports available dated `catalog-*.json` snapshots, the previous `latest.json`, and existing category records into cumulative history, while keeping original snapshots untouched. Migration metadata identifies those sources and leaves prior coverage unknown: observations already discarded by older exporters cannot be recovered. Export once after upgrading, even if the saved recording has not changed.
 
-Each JSON file is replaced atomically. If another application reads several categories at once, it must check that their `exportId` values match. This ID and `source` describe the latest processed save; they do not identify all accumulated evidence. Unavailable game data remains unavailable; converting a recording does not supply missing item stats, enemy abilities, exact resource-node positions, or confirmed loot sources. See the [catalog format](website-catalog.md) for fields and interpretation limits.
+JSON files use two-space indentation and line breaks for readability. Repeated checks skip unchanged saves, and incomplete saves are retried while watching. Keep backups of the export folder, particularly `history.json`, because it retains observations that may no longer exist in SavedVariables. Deleted category files and `database.json` can be rebuilt from the archive.
+
+Each JSON file is replaced atomically. When reading multiple cumulative files, require matching `exportId` and `historyId` values. The desktop summary also checks these before showing a completed export. `exportId` and `source` describe the latest processed save; `historyId` identifies the accumulated evidence. Unavailable game data remains unavailable; converting a recording does not supply missing item stats, enemy abilities, exact resource-node positions, or confirmed loot sources. See the [catalog format](website-catalog.md) for fields and interpretation limits.
 
 ## Run from source
 
@@ -60,7 +64,7 @@ artifacts/exporter-venv/Scripts/python.exe tools/package_exporter.py
 
 The build produces `dist/exporter/ForeverTomeExporter.exe`, with an adjacent `LICENSE`, short `README.txt`, and `VERSION`. The release version comes from `ForeverTome/ForeverTome.toc` and is embedded in the executable's Windows file/product metadata and written to `VERSION`. It packages application code and its dependencies, without personal settings, SavedVariables, or generated catalogs. The command builds the application without installing or starting it for normal use. Its build files stay under the ignored `artifacts/exporter-build/` directory. Use `--output-dir <folder>` to choose another distribution folder.
 
-After packaging, the command automatically runs the executable's smoke test, checking Tcl/Tk and catalog conversion, and requires a successful JSON report at `artifacts/exporter-build/smoke-test.json`. This test exits automatically and does not change game data. To run it separately:
+After packaging, the command automatically runs the executable's smoke test, checking Tcl/Tk, catalog conversion, matching history/database generations, canonical creature counters, and addon installation/update behavior. It requires a successful JSON report at `artifacts/exporter-build/smoke-test.json`. This test exits automatically and does not change game data. To run it separately:
 
 ```powershell
 dist/exporter/ForeverTomeExporter.exe --smoke-test artifacts/exporter-build/manual-smoke-test.json
