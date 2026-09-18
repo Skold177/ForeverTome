@@ -40,6 +40,11 @@ function Host.new(saved, version, build)
     e.GetLocale = function()
         return "enUS"
     end
+    e.UnitName = function(token)
+        if token == "player" then
+            return "Syntheticplayer"
+        end
+    end
     e.issecretvalue = function(value)
         return type(value) == "table" and rawget(value, "secret") == true
     end

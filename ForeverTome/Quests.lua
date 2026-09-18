@@ -59,10 +59,85 @@ local function Count(value, maximum)
     return math.min(number, maximum), number <= maximum
 end
 
+local function NameCharacter(text, index, previous)
+    local first = string.byte(text, index)
+    if not first then
+        return false
+    end
+    if previous then
+        while first >= 128 and first < 192 and index > 1 do
+            index = index - 1
+            first = string.byte(text, index)
+        end
+    end
+    if first < 128 then
+        return (first >= 48 and first <= 57) or (first >= 65 and first <= 90)
+            or (first >= 97 and first <= 122) or first == 95
+    end
+    local second, third, fourth = string.byte(text, index + 1, index + 3)
+    local point                 = first
+    if first >= 194 and first < 224 and second then
+        point = (first - 192) * 64 + second - 128
+    elseif first >= 224 and first < 240 and second and third then
+        point = (first - 224) * 4096 + (second - 128) * 64 + third - 128
+    elseif first >= 240 and first < 245 and second and third and fourth then
+        point = (first - 240) * 262144 + (second - 128) * 4096 + (third - 128) * 64 + fourth - 128
+    end
+    return not (point == 160 or point == 161 or point == 171 or point == 183 or point == 187 or point == 191
+        or (point >= 8192 and point <= 8303) or (point >= 12288 and point <= 12351)
+        or (point >= 65040 and point <= 65055) or (point >= 65072 and point <= 65135)
+        or (point >= 65280 and point <= 65295) or (point >= 65306 and point <= 65312)
+        or (point >= 65339 and point <= 65344) or (point >= 65371 and point <= 65381)
+        or (point >= 126976 and point <= 129791))
+end
+
+local function ReplaceLiteral(text, value)
+    local parts = {}
+    local from  = 1
+    while true do
+        local first, last = string.find(text, value, from, true)
+        if not first then
+            parts[#parts + 1] = string.sub(text, from)
+            return table.concat(parts)
+        end
+        local color = string.sub(text, math.max(1, first - 10), first - 1)
+        local match = not NameCharacter(text, last + 1) and
+            (not NameCharacter(text, first - 1, true) or string.match(color, "^|[cC]%x%x%x%x%x%x%x%x$"))
+        parts[#parts + 1] = string.sub(text, from, first - 1)
+        parts[#parts + 1] = match and "adventurer" or string.sub(text, first, last)
+        from             = last + 1
+    end
+end
+
+local function QuestText(value)
+    local text = FT.Value(value, "string")
+    if not text then
+        return nil
+    end
+    local name, realm = FT.Call("UnitName", "player")
+    name  = FT.Value(name, "string")
+    realm = FT.Value(realm, "string")
+    if not name or name == "" then
+        FT.Diagnostic("privacy", "player_name_unavailable")
+        return nil
+    end
+    local normalizedRealm = FT.Value(FT.Call("GetNormalizedRealmName"), "string")
+    if realm and realm ~= "" then
+        text = ReplaceLiteral(text, name .. "-" .. realm)
+    end
+    if normalizedRealm and normalizedRealm ~= "" and normalizedRealm ~= realm then
+        text = ReplaceLiteral(text, name .. "-" .. normalizedRealm)
+    end
+    return ReplaceLiteral(text, name)
+end
+
 local function Fields(source, specification)
     local result = {}
     for key, valueType in pairs(specification) do
         result[key] = FT.Field(source, key, valueType)
+        if valueType == "string" and key ~= "type" then
+            result[key] = QuestText(result[key])
+        end
     end
     return result
 end
@@ -275,11 +350,11 @@ local function Snapshot(run, rawInfo, capture, logIndex)
     local comparable                    = complete and previous and previous.complete and Comparable(previous.objectives, objectives)
     if logIndex then
         local description, objectiveText = FT.Call("GetQuestLogQuestText", logIndex)
-        metadata.description    = FT.Value(description, "string")
-        metadata.objective_text = FT.Value(objectiveText, "string")
+        metadata.description    = QuestText(description)
+        metadata.objective_text = QuestText(objectiveText)
     end
     if not metadata.title then
-        metadata.title = FT.Value(FT.Call("C_QuestLog.GetTitleForQuestID", run.questID), "string")
+        metadata.title = QuestText(FT.Call("C_QuestLog.GetTitleForQuestID", run.questID))
     end
     if metadata.title == nil then
         missing.title = "not_ready"
@@ -498,7 +573,7 @@ local function Dialogue(event, questStartItemID)
     local data    = {
         interaction_id = interaction, quest_id = questID, phase = event,
         quest_run_id = questID and runs[questID] and runs[questID].id,
-        npc = FT.Unit("npc"), title = FT.Value(FT.Call("GetTitleText"), "string"),
+        npc = FT.Unit("npc"), title = QuestText(FT.Call("GetTitleText")),
     }
     if not questID then
         missing.quest_id = "not_ready"
@@ -507,15 +582,15 @@ local function Dialogue(event, questStartItemID)
         missing.npc = "unknown_source"
     end
     if event == "QUEST_DETAIL" then
-        data.text               = FT.Value(FT.Call("GetQuestText"), "string")
-        data.objective_text     = FT.Value(FT.Call("GetObjectiveText"), "string")
+        data.text               = QuestText(FT.Call("GetQuestText"))
+        data.objective_text     = QuestText(FT.Call("GetObjectiveText"))
         data.quest_start_item_id = ContentID(questStartItemID)
     elseif event == "QUEST_PROGRESS" then
-        data.text           = FT.Value(FT.Call("GetProgressText"), "string")
+        data.text           = QuestText(FT.Call("GetProgressText"))
         data.required_items = ReadRewards("required", "GetNumQuestItems", missing)
         data.required_money = FT.Value(FT.Call("GetQuestMoneyToGet"), "number")
     elseif event == "QUEST_COMPLETE" then
-        data.text = FT.Value(FT.Call("GetRewardText"), "string")
+        data.text = QuestText(FT.Call("GetRewardText"))
     end
     if event == "QUEST_DETAIL" or event == "QUEST_COMPLETE" then
         data.rewards      = ReadRewards("reward", "GetNumQuestRewards", missing)
@@ -574,7 +649,7 @@ local function Gossip(event)
     local missing = {}
     local data    = {
         interaction_id = interaction, interaction_type = "gossip", npc = FT.Unit("npc"),
-        text = FT.Value(FT.Call("C_GossipInfo.GetText"), "string"),
+        text = QuestText(FT.Call("C_GossipInfo.GetText")),
         available_quests = GossipArray("C_GossipInfo.GetAvailableQuests", "available_quests", gossipFields, missing),
         active_quests = GossipArray("C_GossipInfo.GetActiveQuests", "active_quests", gossipFields, missing),
         options = GossipArray("C_GossipInfo.GetOptions", "options", optionFields, missing),
@@ -605,12 +680,12 @@ local function GreetingQuests(active, missing)
         if active then
             local title, isComplete = FT.Call("GetActiveTitle", index)
             quest.questID    = ContentID(FT.Call("GetActiveQuestID", index))
-            quest.title      = FT.Value(title, "string")
+            quest.title      = QuestText(title)
             quest.isComplete = FT.Value(isComplete, "boolean")
         else
             local trivial, frequency, repeatable, legendary, questID, important, meta, infoID = FT.Call("GetAvailableQuestInfo", index)
             quest.questID     = ContentID(questID)
-            quest.title       = FT.Value(FT.Call("GetAvailableTitle", index), "string")
+            quest.title       = QuestText(FT.Call("GetAvailableTitle", index))
             quest.isTrivial   = FT.Value(trivial, "boolean")
             quest.frequency   = FT.Value(frequency, "number")
             quest.repeatable  = FT.Value(repeatable, "boolean")
@@ -636,7 +711,7 @@ local function Greeting(event)
     local missing = {}
     local data    = {
         interaction_id = interaction, interaction_type = "quest_greeting", npc = FT.Unit("npc"),
-        text = FT.Value(FT.Call("GetGreetingText"), "string"),
+        text = QuestText(FT.Call("GetGreetingText")),
         available_quests = GreetingQuests(false, missing), active_quests = GreetingQuests(true, missing),
     }
     if not data.npc then
@@ -778,7 +853,7 @@ FT.On("QUEST_DATA_LOAD_RESULT", function(event, rawQuestID, rawSuccess)
         return
     end
     if success then
-        local title = FT.Value(FT.Call("C_QuestLog.GetTitleForQuestID", questID), "string")
+        local title = QuestText(FT.Call("C_QuestLog.GetTitleForQuestID", questID))
         FT.Emit("quest.metadata", { quest_id = questID, title = title, load_success = success },
             event, "api_snapshot", request.references, not title and { title = "not_ready" } or nil)
         if title and pending[questID] == request then
