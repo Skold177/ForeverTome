@@ -21,7 +21,7 @@ from tools.catalog_entities import CatalogBuilder
 
 FORMAT            = "forevertome.website-catalog"
 SCHEMA_VERSION    = 1
-GENERATOR_VERSION = "0.2.5"
+GENERATOR_VERSION = "0.2.6"
 TRANSACTION_KINDS = frozenset("""
 quest.accepted quest.turned_in quest.reward_received quest.removed quest.objective_delta quest.ready
 item.received inventory.delta loot.opened loot.slot_cleared loot.closed merchant.opened merchant.closed
@@ -150,6 +150,7 @@ def build_catalog(database: dict, source_sha256: str) -> dict:
             "display": "Representative observed metadata; inspect facts and exact item variants for context.",
             "locations": "Outer locations are player positions at observation time, not NPC spawn points.",
             "receipts": "Quest, chat, crafting and inventory channels can overlap. Do not sum channels as acquisitions.",
+            "loot": "Loot provenance keeps API sources and contextual candidates separate; a candidate is not a confirmed drop source.",
             "itemStats": "Absent stats are unknown, never zero. Older recordings did not capture gameplay stats.",
             "icons": "Game file IDs and paths require an asset resolver; no image bytes or public URL are implied.",
             "text": "Recorded strings are untrusted display text, not HTML.",

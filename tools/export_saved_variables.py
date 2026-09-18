@@ -31,7 +31,7 @@ class Limits:
 ARRAY_FIELDS = frozenset({
     "sessions", "observations", "related_observation_ids", "objectives", "changes",
     "rewards", "choices", "required_items", "available_quests", "active_quests",
-    "options", "sources", "items", "reagents", "recipes", "costs",
+    "options", "sources", "source_candidates", "items", "reagents", "recipes", "costs",
     "currencies", "reward_items", "choice_items", "source_pairs", "spells",
     "reagent_slots", "links", "collectors", "skill_lines", "entries", "flyout_slots",
     "added_spell_ids", "removed_spell_ids", "power_costs", "treeIDs", "nodeIDs", "entryIDs",

@@ -568,6 +568,10 @@ return {
             host:assertEqual(interaction.data.source_attribution, "unresolved")
             host:assertEqual(visible.data.source_status, "unknown")
             host:assertEqual(visible.data.sources, {})
+            host:assertEqual(visible.data.source_candidates, {
+                interaction.data.target_candidate, interaction.data.mouseover_candidate,
+            })
+            host:assertEqual(visible.related_observation_ids, { interaction.observation_id })
             host:assertEqual(visible.missing_fields.sources, "unknown_source")
             host:event("LOOT_CLOSED")
             host.env.UnitGUID = function()
@@ -577,6 +581,294 @@ return {
             host:assertEqual(host:last("loot.opened").data.target_candidate, nil)
             host:assertEqual(host:last("loot.opened").data.mouseover_candidate, nil)
             host:assertEqual(host:last("loot.visible").data.sources, {})
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "native source probe preserves plural identities without certifying the return contract",
+        run = function(Host)
+            local host, state = configured(Host)
+            local firstGUID   = "Creature-0-1-2-3-1001-0000000001"
+            local secondGUID  = "Vehicle-0-1-2-3-1002-0000000002"
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 3 } }
+            host.env.GetLootSourceInfo = function(slot)
+                host:assertEqual(slot, 1)
+                return firstGUID, 1, secondGUID, 2
+            end
+            host:event("LOOT_READY", true)
+            local visible = host:last("loot.visible")
+            host:assertEqual(visible.data.sources, {
+                { source_guid = firstGUID, entity_kind = "Creature", creature_id = 1001, quantity = 1 },
+                { source_guid = secondGUID, entity_kind = "Vehicle", creature_id = 1002, quantity = 2 },
+            })
+            host:assertEqual(visible.data.source_status, "unverified")
+            host:assertEqual(visible.data.source_method, "GetLootSourceInfo")
+            host:assertEqual(visible.data.source_mapping_status, "unverified")
+            host:assertEqual(visible.data.source_quantity_matches, true)
+            host:assertEqual(visible.missing_fields.source_mapping, "unverified_contract")
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. "x3.")
+            local receipt = host:last("item.received")
+            host:assertEqual(receipt.data.source_status, "unknown")
+            host:assertEqual(receipt.data.loot_match_status, "candidate")
+            host:assertEqual(receipt.related_observation_ids, { visible.observation_id })
+            host:assertEqual(receipt.data.source_candidates[1].guid, firstGUID)
+            host:assertEqual(receipt.data.source_candidates[2].creature_id, 1002)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "native source probe rejects private identities and keeps mismatches unresolved",
+        run = function(Host)
+            local host, state = configured(Host)
+            local guid        = "Creature-0-1-2-3-1001-0000000001"
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 3 } }
+            host.env.GetLootSourceInfo = function()
+                return guid, 1, "Player-123-Private", 2, { secret = true }, 1
+            end
+            host:event("LOOT_OPENED", false, false)
+            local visible = host:last("loot.visible")
+            host:assertEqual(#visible.data.sources, 1)
+            host:assertEqual(visible.data.source_status, "partial")
+            host:assertEqual(visible.data.source_quantity_matches, nil)
+            host.env.GetLootSourceInfo = function()
+                return guid, 2
+            end
+            host:event("LOOT_SLOT_CHANGED", 1)
+            host:assertEqual(host:last("loot.visible").data.source_quantity_matches, false)
+            host:assertEqual(host:last("loot.visible").missing_fields.source_mapping, "quantity_mismatch")
+            host.env.GetLootSourceInfo = function()
+                error("API unavailable in this state")
+            end
+            host:event("LOOT_SLOT_CHANGED", 1)
+            host:assertEqual(host:last("loot.visible").data.sources, {})
+            host:assertEqual(host:last("loot.visible").data.source_status, "unknown")
+            host.FT.Profile.loot_source_probe = false
+            host.env.GetLootSourceInfo = function()
+                error("disabled probe should not run")
+            end
+            host:event("LOOT_SLOT_CHANGED", 1)
+            host:assertEqual(host:last("loot.visible").missing_fields.source_mapping, "unsupported")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "loot receipts retain frozen entity candidates across slot clearing and closing",
+        run = function(Host)
+            local host, state = configured(Host)
+            local guid        = "Creature-0-1-2-3-1001-0000000001"
+            host.env.UnitGUID = function(token)
+                if token == "target" then
+                    return guid
+                end
+            end
+            host.env.C_CreatureInfo.GetCreatureID = function()
+                return 1001
+            end
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 2 } }
+            host:event("LOOT_READY", true)
+            local visible = host:last("loot.visible")
+            host.env.UnitGUID = function()
+                return "Creature-0-1-2-3-1002-0000000002"
+            end
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:event("LOOT_SLOT_CLEARED", 1)
+            host:event("LOOT_CLOSED")
+            host:advance(0.5)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            local receipt = host:last("item.received")
+            host:assertEqual(receipt.data.loot_session_id, visible.data.loot_session_id)
+            host:assertEqual(receipt.data.loot_slot, 1)
+            host:assertEqual(receipt.data.source_candidates[1].guid, guid)
+            host:assertEqual(receipt.related_observation_ids, { visible.observation_id })
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+            host:assertEqual(#host:records("item.received"), 3)
+            host:assertEqual(host:records("loot.visible")[1], visible)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "receipt correlation rejects ambiguous variants quantities and nonloot awards",
+        run = function(Host)
+            local host, state = configured(Host)
+            state.loot = {
+                { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 },
+                { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 },
+            }
+            host.env.LOOT_ITEM_CREATED_SELF = "You create: %s."
+            host.env.LOOT_ITEM_PUSHED_SELF  = "You receive item: %s."
+            host:event("LOOT_OPENED", false, false)
+            for _, message in ipairs({
+                "You receive loot: " .. firstLink .. ".",
+                "You receive loot: " .. secondLink .. ".",
+                "You receive loot: " .. firstLink .. "x3.",
+                "You create: " .. firstLink .. ".",
+                "You receive item: " .. firstLink .. ".",
+            }) do
+                host:event("CHAT_MSG_LOOT", message)
+                host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+                host:assertEqual(host:last("item.received").related_observation_ids, {})
+            end
+            host:assertEqual(#host:records("item.received"), 5)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "closed loot receipt candidates expire and never cross resets transitions or new windows",
+        run = function(Host)
+            for _, boundary in ipairs({ "expiry", "reset", "transition", "new_window" }) do
+                local host, state = configured(Host)
+                state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+                host:event("LOOT_OPENED", false, false)
+                host:event("LOOT_CLOSED")
+                if boundary == "expiry" then
+                    host:advance(2.1)
+                elseif boundary == "reset" then
+                    host.FT.ResetCollectors("test_gap")
+                elseif boundary == "transition" then
+                    host:event("PLAYER_LEAVING_WORLD")
+                    host:event("PLAYER_ENTERING_WORLD", false, false)
+                else
+                    state.loot = {}
+                    host:event("LOOT_OPENED", false, false)
+                end
+                host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+                host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+                host:assertEqual(host:last("item.received").related_observation_ids, {})
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "item container loot excludes target candidates even when opened follows ready",
+        run = function(Host)
+            local host, state = configured(Host)
+            host.env.UnitGUID = function()
+                return "Creature-0-1-2-3-1001-0000000001"
+            end
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+            host:event("LOOT_READY", true)
+            host:event("LOOT_OPENED", true, true)
+            host:assertEqual(host:last("loot.visible").data.source_candidates, {})
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:assertEqual(host:last("item.received").data.source_candidates, {})
+            host:assertEqual(host:last("item.received").data.source_status, "unknown")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "slot receipt budgets survive quantity reductions before and after receipt events",
+        run = function(Host)
+            for _, ordering in ipairs({ "receipt_first", "quantity_first" }) do
+                local host, state = configured(Host)
+                state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 2 } }
+                host:event("LOOT_OPENED", false, false)
+                local original = host:last("loot.visible")
+                if ordering == "receipt_first" then
+                    host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+                end
+                state.loot[1].quantity = 1
+                host:event("LOOT_SLOT_CHANGED", 1)
+                local reduced = host:last("loot.visible")
+                host:assertEqual(reduced.related_observation_ids, {
+                    host:last("loot.opened").observation_id, original.observation_id,
+                })
+                if ordering == "quantity_first" then
+                    host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+                end
+                host:assertEqual(host:last("item.received").data.loot_match_status, "candidate")
+                state.loot[1].name = "Cached Hood"
+                host:event("LOOT_SLOT_CHANGED", 1)
+                local latest = host:last("loot.visible")
+                host:assertEqual(latest.related_observation_ids, {
+                    host:last("loot.opened").observation_id, reduced.observation_id,
+                })
+                host:event("LOOT_SLOT_CLEARED", 1)
+                host:event("LOOT_CLOSED")
+                host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+                host:assertEqual(host:last("item.received").data.loot_match_status, "candidate")
+                host:assertEqual(host:last("item.received").related_observation_ids, { latest.observation_id })
+                host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+                host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+                host:assertHealthy()
+            end
+        end,
+    },
+    {
+        name = "delayed receipts retain the revision evidence supporting their original quantity",
+        run = function(Host)
+            local host, state = configured(Host)
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 3 } }
+            host:event("LOOT_OPENED", false, false)
+            local original = host:last("loot.visible")
+            state.loot[1].quantity = 1
+            host:event("LOOT_SLOT_CHANGED", 1)
+            local latest = host:last("loot.visible")
+            host:event("LOOT_SLOT_CLEARED", 1)
+            host:event("LOOT_CLOSED")
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. "x3.")
+            local receipt = host:last("item.received")
+            host:assertEqual(receipt.data.loot_match_status, "candidate")
+            host:assertEqual(receipt.related_observation_ids, { latest.observation_id })
+            host:assertEqual(latest.related_observation_ids, {
+                host:last("loot.opened").observation_id, original.observation_id,
+            })
+            host:assertEqual(original.data.quantity, 3)
+            host:assertEqual(latest.data.quantity, 1)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "only quantity increases replenish receipt budgets and changed variants start fresh",
+        run = function(Host)
+            local host, state = configured(Host)
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 2 } }
+            host:event("LOOT_OPENED", false, false)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. "x2.")
+            state.loot[1].quantity = 1
+            host:event("LOOT_SLOT_CHANGED", 1)
+            state.loot[1].quantity = nil
+            host:event("LOOT_SLOT_CHANGED", 1)
+            state.loot[1].quantity = 1
+            host:event("LOOT_SLOT_CHANGED", 1)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+            state.loot[1].quantity = 3
+            host:event("LOOT_SLOT_CHANGED", 1)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. "x2.")
+            host:assertEqual(host:last("item.received").data.loot_match_status, "candidate")
+            state.loot[1].name = "Cached Hood"
+            host:event("LOOT_SLOT_CHANGED", 1)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+            state.loot[1].link     = secondLink
+            state.loot[1].quantity = 1
+            host:event("LOOT_SLOT_CHANGED", 1)
+            local changed = host:last("loot.visible")
+            host:assertEqual(changed.related_observation_ids, { host:last("loot.opened").observation_id })
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. secondLink .. ".")
+            host:assertEqual(host:last("item.received").related_observation_ids, { changed.observation_id })
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. secondLink .. ".")
+            host:assertEqual(host:last("item.received").data.loot_session_id, nil)
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "late item container flag suppresses candidates after slots have already disappeared",
+        run = function(Host)
+            local host, state = configured(Host)
+            host.env.UnitGUID = function()
+                return "Creature-0-1-2-3-1001-0000000001"
+            end
+            state.loot = { { kind = 1, link = firstLink, name = "Test Hood", quantity = 1 } }
+            host:event("LOOT_READY", true)
+            host:event("LOOT_SLOT_CLEARED", 1)
+            state.loot = {}
+            host:event("LOOT_OPENED", true, true)
+            host:event("CHAT_MSG_LOOT", "You receive loot: " .. firstLink .. ".")
+            host:assertEqual(host:last("item.received").data.source_candidates, {})
             host:assertHealthy()
         end,
     },

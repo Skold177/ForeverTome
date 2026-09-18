@@ -8,7 +8,9 @@ local MAX_ITEM_STATS = 64
 local MAX_ITEM_LINES = 64
 local MAX_ITEM_READS = 3
 local ITEM_TIMEOUT   = 15
+local RECEIPT_GRACE  = 2
 local activeLoot     = nil
+local recentLoot     = nil
 local bagBaseline    = nil
 local pendingItems   = {}
 local pendingCount   = 0
@@ -413,7 +415,8 @@ end
 
 local function readSources(slot, quantity)
     local sources = {}
-    if FT.Profile.loot_source_pairs ~= true then
+    if FT.Profile.loot_source_pairs ~= true and FT.Profile.loot_source_probe ~= true
+        or not FT.Resolve("GetLootSourceInfo") then
         return sources, "unknown", nil, "unsupported"
     end
     local raw     = packValues(FT.Call("GetLootSourceInfo", slot))
@@ -429,7 +432,15 @@ local function readSources(slot, quantity)
             or guid:match("^GameObject%-%d+%-%d+%-%d+%-%d+%-%d+%-%x+$")
             or guid:match("^Vehicle%-%d+%-%d+%-%d+%-%d+%-%d+%-%x+$")
             or guid:match("^Item%-%d+%-%d+%-%x+$")) then
-            sources[#sources + 1] = { source_guid = guid, quantity = count }
+            local kind       = guid:match("^([A-Za-z]+)%-")
+            local creatureID = nil
+            if kind == "Creature" or kind == "Vehicle" then
+                creatureID = number(FT.Call("C_CreatureInfo.GetCreatureID", guid), 1, 2147483647)
+                    or number(tonumber(guid:match("^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")), 1, 2147483647)
+            end
+            sources[#sources + 1] = {
+                source_guid = guid, quantity = count, entity_kind = kind, creature_id = creatureID,
+            }
             total                = total + count
         else
             partial = true
@@ -442,7 +453,16 @@ local function readSources(slot, quantity)
     if quantity ~= nil and not partial then
         matches = total == quantity
     end
-    return sources, partial and "partial" or "mapped", matches, partial and "invalid_result" or nil
+    if partial then
+        return sources, "partial", matches, "invalid_result"
+    end
+    if matches == false then
+        return sources, "partial", matches, "quantity_mismatch"
+    end
+    if FT.Profile.loot_source_pairs ~= true then
+        return sources, "unverified", matches, "unverified_contract"
+    end
+    return sources, "mapped", matches
 end
 
 local function readLootSlot(slot)
@@ -474,8 +494,10 @@ local function readLootSlot(slot)
     local sources, sourceState, sourceMatches, sourceReason = readSources(slot, quantity)
     local missing = {}
     if sourceReason then
-        missing.sources = "unknown_source"
         missing.source_mapping = sourceReason
+        if #sources == 0 then
+            missing.sources = "unknown_source"
+        end
     end
     if kind == "item" and not itemID then
         missing.item_id = "not_ready"
@@ -510,6 +532,8 @@ local function readLootSlot(slot)
         icon_path               = FT.Value(texture, "string"),
         sources                 = sources,
         source_status           = sourceState,
+        source_method           = #sources > 0 and "GetLootSourceInfo" or nil,
+        source_mapping_status   = #sources > 0 and (FT.Profile.loot_source_pairs and "validated" or "unverified") or nil,
         source_quantity_matches = sourceMatches,
         completeness            = complete and "complete" or "partial",
     }, missing
@@ -524,6 +548,7 @@ local function snapshotSlot(slot, event)
     if not data then
         return false
     end
+    data.source_candidates = context.from_item == true and {} or context.source_candidates
     local previous = activeLoot.slots[slot]
     if previous and same(previous.data, data) and same(previous.missing, missing) and not previous.cleared then
         return true, data.completeness == "complete"
@@ -535,11 +560,28 @@ local function snapshotSlot(slot, event)
     end
     record.loot_session_id = activeLoot.id
     record.revision        = revision
-    local observationID = FT.Emit("loot.visible", record, event, "api_snapshot", nil, missing)
+    local related      = { context.opened_id }
+    local received     = 0
+    local capacity     = data.quantity or 0
+    local lastQuantity = data.quantity
+    if previous and data.slot_kind == "item" and previous.data.slot_kind == "item"
+        and data.link and previous.data.link == data.link then
+        related[#related + 1] = previous.observation_id
+        received              = previous.received or 0
+        capacity              = previous.receipt_capacity or 0
+        lastQuantity          = data.quantity or previous.last_quantity
+        if data.quantity then
+            capacity = capacity + math.max(0, data.quantity - (previous.last_quantity or 0))
+        end
+    end
+    local observationID = FT.Emit("loot.visible", record, event, "api_snapshot", related, missing)
     if not observationID or activeLoot ~= context then
         return false
     end
-    activeLoot.slots[slot] = { data = data, missing = missing, revision = revision, observation_id = observationID }
+    activeLoot.slots[slot] = {
+        data = data, missing = missing, revision = revision, observation_id = observationID, received = received,
+        receipt_capacity = capacity, last_quantity = lastQuantity,
+    }
     if data.item_id then
         FT.RequestItem(data.item_id, data.link, observationID)
     end
@@ -548,18 +590,34 @@ end
 
 local function lootOpened(event, automatic, fromItem)
     if not activeLoot then
-        activeLoot = { id = FT.NewContext("loot"), slots = {} }
+        local target     = FT.Unit("target")
+        local mouseover  = FT.Unit("mouseover")
+        local candidates = {}
+        if target then
+            candidates[#candidates + 1] = target
+        end
+        if mouseover then
+            candidates[#candidates + 1] = mouseover
+        end
+        recentLoot = nil
+        activeLoot = {
+            id = FT.NewContext("loot"), slots = {}, source_candidates = candidates,
+            from_item = FT.Value(fromItem, "boolean"),
+        }
         local openedID = FT.Emit("loot.opened", {
             loot_session_id     = activeLoot.id,
             automatic           = FT.Value(automatic, "boolean"),
             from_item           = FT.Value(fromItem, "boolean"),
-            target_candidate    = FT.Unit("target"),
-            mouseover_candidate = FT.Unit("mouseover"),
+            target_candidate    = target,
+            mouseover_candidate = mouseover,
             source_attribution  = "unresolved",
         }, event, "direct_event")
         if not openedID or not activeLoot then
             return
         end
+        activeLoot.opened_id = openedID
+    elseif FT.Value(fromItem, "boolean") ~= nil then
+        activeLoot.from_item = fromItem
     end
     local context  = activeLoot
     local count    = number(FT.Call("GetNumLootItems"), 0, 100000)
@@ -626,9 +684,41 @@ end
 
 local function closeLoot(event, reason)
     if activeLoot then
+        local context = activeLoot
         FT.Emit("loot.closed", { loot_session_id = activeLoot.id, reason = reason or "closed" }, event, "direct_event")
+        if activeLoot == context and not reason then
+            context.closed_at = FT.Now()
+            recentLoot        = context
+        else
+            recentLoot = nil
+        end
         activeLoot = nil
     end
+end
+
+local function receiptLoot(link, quantity, templateName)
+    if templateName ~= "LOOT_ITEM_SELF" and templateName ~= "LOOT_ITEM_SELF_MULTIPLE" then
+        return nil
+    end
+    if recentLoot and FT.Now() - recentLoot.closed_at > RECEIPT_GRACE then
+        recentLoot = nil
+    end
+    local context = activeLoot or recentLoot
+    local match   = nil
+    if not context then
+        return nil
+    end
+    for _, slot in pairs(context.slots) do
+        local data = slot.data
+        if data.slot_kind == "item" and data.link == link
+            and quantity <= slot.receipt_capacity - (slot.received or 0) then
+            if match then
+                return nil
+            end
+            match = slot
+        end
+    end
+    return match, context
 end
 
 local function containerMethod(method)
@@ -887,14 +977,38 @@ local function localReceipt(event, message)
                 end
                 local itemID = FT.ItemID(link)
                 if valid and itemID and quantity then
-                    local observationID = FT.Emit("item.received", {
+                    local slot, context = receiptLoot(link, quantity, templateName)
+                    local data          = {
                         item_id         = itemID,
                         link            = link,
                         quantity        = quantity,
                         recipient       = "local_player",
                         receipt_template = templateName,
                         source_status   = "unknown",
-                    }, event, "localized_self_receipt", nil, { source = "unknown_source" })
+                    }
+                    local related = nil
+                    if slot then
+                        data.loot_session_id   = context.id
+                        data.loot_slot         = slot.data.slot
+                        data.loot_revision     = slot.revision
+                        data.loot_match_status = "candidate"
+                        data.source_candidates = context.from_item == true and {} or slot.data.source_candidates
+                        if #slot.data.sources > 0 then
+                            data.source_candidates = {}
+                            for _, source in ipairs(slot.data.sources) do
+                                data.source_candidates[#data.source_candidates + 1] = {
+                                    guid = source.source_guid, entity_kind = source.entity_kind,
+                                    creature_id = source.creature_id, identity_method = "GetLootSourceInfo",
+                                }
+                            end
+                        end
+                        related = { slot.observation_id }
+                    end
+                    local observationID = FT.Emit("item.received", data, event,
+                        "localized_self_receipt", related, { source = "unknown_source" })
+                    if observationID and slot then
+                        slot.received = (slot.received or 0) + quantity
+                    end
                     FT.RequestItem(itemID, link, observationID)
                     return
                 end
@@ -920,12 +1034,14 @@ FT.On("PLAYER_ENTERING_WORLD", inventoryBaseline)
 FT.On("FT_BASELINE", inventoryBaseline)
 FT.On("PLAYER_LEAVING_WORLD", function(event)
     closeLoot(event, "transition")
+    recentLoot  = nil
     bagBaseline = nil
     insideWorld = false
 end)
 FT.OnReset(function()
     generation   = generation + 1
     activeLoot   = nil
+    recentLoot   = nil
     bagBaseline  = nil
     pendingItems = {}
     pendingCount = 0

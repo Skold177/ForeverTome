@@ -197,6 +197,19 @@ class SavedVariablesTests(unittest.TestCase):
         self.assertNotIn("entries", scan)
         self.assertNotIn("skill_lines", scan)
 
+    def test_loot_source_candidates_preserve_empty_and_populated_arrays(self):
+        for value, expected in (
+            ('{}', []),
+            ('{ { ["creature_id"] = 300, ["unit_token"] = "target" } }',
+             [{"creature_id": 300, "unit_token": "target"}]),
+        ):
+            with self.subTest(value=value):
+                source   = FIXTURE.replace('"quest.dialogue"', '"loot.visible"', 1)
+                source   = source.replace('["choices"] = {}', f'["source_candidates"] = {value}', 1)
+                database = export.parse_saved_variables(source)
+                data     = database["sessions"][0]["observations"][0]["data"]
+                self.assertEqual(data["source_candidates"], expected)
+
     def test_nested_missing_reasons_do_not_become_catalog_arrays(self):
         source = FIXTURE.replace('"quest.dialogue"', '"spellbook.snapshot"', 1)
         source = source.replace('["choices"] = {}', '''["choices"] = {}, ["entries"] = {
@@ -212,7 +225,8 @@ class SavedVariablesTests(unittest.TestCase):
 
     def test_catalog_rejects_sparse_and_mixed_array_shapes(self):
         for field in ("treeIDs", "nodeIDs", "entryIDs", "visibleEdges", "nodes", "skill_lines",
-                      "entries", "flyout_slots", "power_costs", "added_spell_ids", "removed_spell_ids"):
+                      "entries", "flyout_slots", "power_costs", "added_spell_ids", "removed_spell_ids",
+                      "source_candidates"):
             for value in ('{ [2] = 12 }', '{ [1] = 12, status = "unavailable" }', 'false'):
                 with self.subTest(field=field, value=value), self.assertRaises(export.ExportError):
                     source = FIXTURE.replace('["choices"] = {}', f'["choices"] = {{}}, ["{field}"] = {value}', 1)

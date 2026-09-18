@@ -34,7 +34,7 @@ The API paths below are relative to that extraction's `raw/interface/addons/` di
 | Spells | Generated `spellbookdocumentation.lua`, `spelldocumentation.lua`; Camelot uses the mainline spellbook | Read player/pet skill lines and entries, passive/future spells, flyouts, metadata and current character state; [spell contract](implementation-spells.md) |
 | Talents | Generated `classtalentsdocumentation.lua`, `sharedtraitsdocumentation.lua` | Read the active config and accessible class trees through `C_ClassTalents`/`C_Traits`; [talent contract](implementation-talents.md) |
 | Combat | Generated `combatlogsecuredocumentation.lua`: `C_CombatLogSecure` is `SecureOnly`; `combatlogdocumentation.lua` marks unfiltered event restricted | Direct combat-log/death capture remains disabled |
-| Loot sources | No declaration or UI usage for `GetLootSourceInfo` found in this extraction | Source-pair decoding remains disabled; targeted creatures are not promoted to drop sources |
+| Loot sources | No declaration or UI usage in the extraction; installed `WowB.exe` contains `GetLootSourceInfo` at byte 83,289,760 and `Usage: GetLootSourceInfo(slot)` at byte 83,290,792 | Guarded runtime probing retains readable source pairs with an unverified contract; targeted creatures remain candidates |
 
 The live recording session header establishes `GetBuildInfo()` interface version **16001**, matching the packaged TOC. This is runtime evidence; extracted Blizzard TOCs and executable versions alone did not establish it. Broader event/readability coverage, coordinate semantics, and the new 0.2.3 item details still need the relevant cases in the [WF test plan](04-validation/wf-test-plan.md).
 

@@ -72,12 +72,194 @@ local function DialogueFixture(host, state)
     host.env.C_CreatureInfo.GetCreatureID = function()
         return state.npcID
     end
-    host.env.UnitName = function()
+    host.env.UnitName = function(token)
+        if token == "player" then
+            return "Syntheticplayer"
+        end
         return "Quest giver"
     end
 end
 
 return {
+    {
+        name = "quests: player names are removed before narrative and objective persistence",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host.env.UnitName = function(token)
+                if token == "player" then
+                    return "Meliadoul", "Test Realm"
+                end
+                return "Quest giver"
+            end
+            host.env.GetNormalizedRealmName = function()
+                return "TestRealm"
+            end
+            state.title               = "Meliadoul's task"
+            state.rows[1].title       = state.title
+            state.objectives[1].text  = "Meliadoul's wolves slain: 0/5"
+            host.env.GetQuestLogQuestText = function()
+                return "Help us, Meliadoul-TestRealm.", "Return to Rorian, Meliadoul-Test Realm."
+            end
+            host.env.GetQuestText = function()
+                return "Meliadoul, speak to Rorian."
+            end
+            host.env.GetObjectiveText = function()
+                return "Meliadoul's task is ready."
+            end
+            host.env.GetProgressText = function()
+                return "Have you finished, Meliadoul?"
+            end
+            host.env.GetRewardText = function()
+                return "You have done well, |cffffffffMeliadoul|r."
+            end
+            host:start()
+            local snapshot = host:last("quest.snapshot")
+            host:assertEqual(snapshot.data.metadata.title, "adventurer's task")
+            host:assertEqual(snapshot.data.metadata.description, "Help us, adventurer.")
+            host:assertEqual(snapshot.data.metadata.objective_text, "Return to Rorian, adventurer.")
+            host:assertEqual(snapshot.data.objectives[1].text, "adventurer's wolves slain: 0/5")
+            state.objectives[1].numFulfilled = 1
+            state.objectives[1].text         = "Meliadoul's wolves slain: 1/5"
+            Refresh(host)
+            local delta = host:last("quest.objective_delta")
+            host:assertEqual(delta.data.before.text, "adventurer's wolves slain: 0/5")
+            host:assertEqual(delta.data.after.text, "adventurer's wolves slain: 1/5")
+            host:event("QUEST_DETAIL")
+            local offer = host:last("quest.dialogue")
+            host:assertEqual(offer.data.text, "adventurer, speak to Rorian.")
+            host:assertEqual(offer.data.objective_text, "adventurer's task is ready.")
+            host:assertEqual(offer.data.npc.name, "Quest giver")
+            host:event("QUEST_PROGRESS")
+            host:assertEqual(host:last("quest.dialogue").data.text, "Have you finished, adventurer?")
+            host:event("QUEST_COMPLETE")
+            host:assertEqual(host:last("quest.dialogue").data.text, "You have done well, |cffffffffadventurer|r.")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: gossip and greeting text do not retain character identities",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host.env.UnitName = function(token)
+                if token == "player" then
+                    return "Meliadoul"
+                end
+                return "Quest giver"
+            end
+            host.env.C_GossipInfo.GetText = function()
+                return "Welcome back, Meliadoul."
+            end
+            host.env.C_GossipInfo.GetAvailableQuests = function()
+                return { { questID = 501, title = "Meliadoul's task" } }
+            end
+            host.env.C_GossipInfo.GetActiveQuests = function()
+                return {}
+            end
+            host.env.C_GossipInfo.GetOptions = function()
+                return { { gossipOptionID = 4, name = "I am Meliadoul.", failureDescription = "Meliadoul must finish first." } }
+            end
+            host.env.GetGreetingText = function()
+                return "Good to see you, Meliadoul."
+            end
+            host.env.GetNumActiveQuests = function()
+                return 0
+            end
+            host.env.GetNumAvailableQuests = function()
+                return 1
+            end
+            host.env.GetAvailableTitle = function()
+                return "Meliadoul's next task"
+            end
+            host.env.GetAvailableQuestInfo = function()
+                return false, 0, false, false, 502
+            end
+            host:start()
+            host:event("GOSSIP_SHOW")
+            local gossip = host:last("interaction.snapshot")
+            host:assertEqual(gossip.data.text, "Welcome back, adventurer.")
+            host:assertEqual(gossip.data.available_quests[1].title, "adventurer's task")
+            host:assertEqual(gossip.data.options[1].name, "I am adventurer.")
+            host:assertEqual(gossip.data.options[1].failureDescription, "adventurer must finish first.")
+            host:event("QUEST_GREETING")
+            local greeting = host:last("interaction.snapshot")
+            host:assertEqual(greeting.data.text, "Good to see you, adventurer.")
+            host:assertEqual(greeting.data.available_quests[1].title, "adventurer's next task")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: name substitution treats Unicode and pattern characters literally",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host.env.UnitName = function(token)
+                if token == "player" then
+                    return "Élise.+", "TestRealm"
+                end
+                return "Quest giver"
+            end
+            host.env.GetRewardText = function()
+                return "“Élise.+-TestRealm”, Élise.+! Rorian and ÉliseX+ remain."
+            end
+            host:start()
+            host:event("QUEST_COMPLETE")
+            host:assertEqual(host:last("quest.dialogue").data.text, "“adventurer”, adventurer! Rorian and ÉliseX+ remain.")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: exact names preserve longer words and Unicode word boundaries",
+        run = function(Host)
+            local host, state = Fixture(Host)
+            DialogueFixture(host, state)
+            host.env.UnitName = function(token)
+                if token == "player" then
+                    return "Arya"
+                end
+                return "Quest giver"
+            end
+            host.env.GetRewardText = function()
+                return "Arya met Aryanna, NotArya, Aryaé and éArya. “Arya”—|cffffffffArya|r."
+            end
+            host:start()
+            host:event("QUEST_COMPLETE")
+            host:assertEqual(host:last("quest.dialogue").data.text,
+                "adventurer met Aryanna, NotArya, Aryaé and éArya. “adventurer”—|cffffffffadventurer|r.")
+            host:assertHealthy()
+        end,
+    },
+    {
+        name = "quests: unavailable or restricted player identity omits personalized text",
+        run = function(Host)
+            for _, mode in ipairs({ "missing", "restricted", "error" }) do
+                local host, state = Fixture(Host)
+                DialogueFixture(host, state)
+                host.env.UnitName = function(token)
+                    if token ~= "player" then
+                        return "Quest giver"
+                    end
+                    if mode == "restricted" then
+                        return { secret = true }
+                    elseif mode == "error" then
+                        error("unavailable")
+                    end
+                end
+                host.env.GetQuestText = function()
+                    return "Help us, Meliadoul."
+                end
+                host:start()
+                host:event("QUEST_DETAIL")
+                local offer = host:last("quest.dialogue")
+                host:assertEqual(offer.data.text, nil)
+                host:assertEqual(offer.data.objective_text, nil)
+                host:assertEqual(offer.data.quest_id, 501)
+                host:assertEqual(offer.missing_fields.text, "not_ready")
+                host:assertEqual(host:last("quest.snapshot").data.objectives[1].text, nil)
+            end
+        end,
+    },
     {
         name = "quests: receipt ambiguity lasts thirty seconds after a delayed turnin",
         run = function(Host)

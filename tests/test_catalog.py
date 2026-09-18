@@ -254,6 +254,84 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn("iconURL", item)
         self.assert_references(document)
 
+    def test_loot_candidates_link_items_and_npcs_without_claiming_drop_sources(self):
+        candidate = {"creature_id": 300, "name": "Synthetic boar", "unit_token": "target",
+                     "guid": "Creature-0-1-2-3-300-00000001", "entity_kind": "Creature", "reaction": 2}
+        visible   = {"item_id": 100, "link": LINK_A, "quantity": 2, "loot_session_id": "loot-1",
+                     "slot": 1, "revision": 1, "source_status": "unknown", "sources": [],
+                     "source_candidates": [candidate]}
+        receipt   = {"item_id": 100, "link": LINK_A, "quantity": 1, "loot_session_id": "loot-1",
+                     "loot_slot": 1, "loot_revision": 1, "loot_match_status": "candidate",
+                     "source_status": "unknown", "source_candidates": [candidate]}
+        session   = make_session(1, [
+            ("loot.opened", {"loot_session_id": "loot-1", "target_candidate": candidate}),
+            ("loot.visible", visible), ("item.received", receipt),
+            ("item.metadata", {"item_id": 100, "name": "Synthetic sword", "link": LINK_A}),
+        ])
+        records = session["observations"]
+        records[1]["related_observation_ids"] = [records[0]["observation_id"]]
+        records[2]["related_observation_ids"] = [records[1]["observation_id"]]
+        document = catalog.build_catalog(make_database(session), SHA256)
+        item     = document["catalog"]["items"][0]
+        npc      = document["catalog"]["npcs"][0]
+        rows     = {row["type"]: row for row in document["observations"] + document["transactions"]}
+        for entity in (item, npc):
+            facts = [fact for fact in entity["facts"] if fact["type"] == "loot.provenance"]
+            self.assertEqual(len(facts), 2)
+            self.assertCountEqual([fact["data"] for fact in facts], [visible, receipt])
+            self.assertTrue(all(fact["data"]["source_status"] == "unknown" for fact in facts))
+        for kind in ("loot.visible", "item.received"):
+            refs = [reference for reference in rows[kind]["entities"] if reference["key"] == npc["key"]]
+            self.assertEqual(refs, [{"key": npc["key"], "role": "loot_candidate",
+                                     "path": "data.source_candidates[0].creature_id"}])
+        self.assertEqual(rows["loot.visible"]["relatedIds"], [rows["loot.opened"]["id"]])
+        self.assertEqual(rows["item.received"]["relatedIds"], [rows["loot.visible"]["id"]])
+        self.assertFalse(any(reference["key"] == npc["key"] for reference in rows["item.metadata"]["entities"]))
+        self.assertNotIn("source_candidates", item["details"])
+        self.assert_references(document)
+
+    def test_plural_api_loot_sources_preserve_quantities_and_mapping_status(self):
+        sources = [
+            {"source_guid": "Creature-0-1-2-3-300-00000001", "creature_id": 300,
+             "entity_kind": "Creature", "quantity": 1},
+            {"source_guid": "Vehicle-0-1-2-3-301-00000002", "creature_id": 301,
+             "entity_kind": "Vehicle", "quantity": 2},
+            {"source_guid": "GameObject-0-1-2-3-400-00000003", "entity_kind": "GameObject", "quantity": 1},
+        ]
+        for status, matches in (("mapped", True), ("mapped", False), ("partial", False), ("unverified", True)):
+            with self.subTest(status=status, matches=matches):
+                data     = {"item_id": 100, "link": LINK_A, "quantity": 4, "loot_session_id": "loot-1",
+                            "slot": 1, "revision": 1, "sources": sources, "source_status": status,
+                            "source_quantity_matches": matches, "source_candidates": []}
+                document = catalog.build_catalog(make_database(make_session(1, [("loot.visible", data)])), SHA256)
+                row      = document["observations"][0]
+                item     = document["catalog"]["items"][0]
+                npcs     = document["catalog"]["npcs"]
+                self.assertEqual({npc["nativeId"] for npc in npcs}, {300, 301})
+                role = "loot_source" if status == "mapped" and matches else "loot_candidate"
+                self.assertEqual([reference["role"] for reference in row["entities"]], ["item", role, role])
+                for entity in [item, *npcs]:
+                    facts = [fact for fact in entity["facts"] if fact["type"] == "loot.provenance"]
+                    self.assertEqual(len(facts), 1)
+                    self.assertEqual(facts[0]["data"], data)
+                self.assert_references(document)
+
+    def test_unknown_and_legacy_loot_do_not_gain_inferred_entity_sources(self):
+        session = make_session(1, [
+            ("loot.opened", {"loot_session_id": "loot-1", "target_candidate": {"creature_id": 300}}),
+            ("loot.visible", {"item_id": 100, "loot_session_id": "loot-1", "source_status": "unknown", "sources": []}),
+            ("item.received", {"item_id": 100, "source_status": "unknown"}),
+        ])
+        document = catalog.build_catalog(make_database(session), SHA256)
+        npc      = document["catalog"]["npcs"][0]
+        rows     = document["observations"] + document["transactions"]
+        for row in rows:
+            if row["type"] in ("loot.visible", "item.received"):
+                self.assertFalse(any(reference["key"] == npc["key"] for reference in row["entities"]))
+                self.assertNotIn("source_candidates", row["data"])
+        self.assertFalse(any(fact["type"] == "loot.provenance" for fact in npc["facts"]))
+        self.assert_references(document)
+
     def test_conflicting_metadata_facts_retain_each_observed_value(self):
         database = make_database(make_session(1, [
             ("item.metadata", {"item_id": 100, "name": "First observed name", "item_level": 5}),

@@ -19,7 +19,8 @@ FT.Profile = {
     quest_accepted_arg = 1, quest_turned_in = known, quest_removed = known, quest_loot_received = known,
     quest_dialogue = known, quest_rewards = known, quest_gossip = known, quest_data_load = known,
     loot_info = known and "modern" or nil, container_info = known and "modern" or nil,
-    item_info = known and "modern" or nil, item_stats = known, item_tooltips = known, loot_source_pairs = false,
+    item_info = known and "modern" or nil, item_stats = known, item_tooltips = known,
+    loot_source_pairs = false, loot_source_probe = known,
     spellbook = known and "modern" or nil, spell_tooltips = known, talents = known and "traits" or nil,
     capabilities = {
         quests = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
@@ -33,7 +34,10 @@ FT.Profile = {
         spellbook = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         spell_tooltips = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
         talents = { status = "wf_unverified", evidence = "installed_client_source", enabled = known },
-        loot_source_mapping = { status = "unsupported", enabled = false, reason = "no_validated_contract" },
+        loot_source_mapping = {
+            status = "wf_unverified", enabled = known, evidence = "installed_client_binary",
+            reason = "guarded_source_probe",
+        },
         combat_death_feed = { status = "restricted", enabled = false, reason = "secure_only_client_api" },
     },
 }

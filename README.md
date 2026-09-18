@@ -47,7 +47,7 @@ Use **`/reload` or normal logout** to save observations to disk. Recording in me
 
 Locations identify their subject: player map coordinates are an observer location, not an exact monster spawn. Native unit positions are separately labeled. Quest deltas link before/after snapshots without claiming that a nearby creature caused progress. Loot visibility, cleared slots, inventory gains, and personal receipt remain separate facts.
 
-The current client restricts the combat-log feed, and no supported loot-source mapping contract was found in its extracted UI. Direct kill tracking and confirmed creature-to-drop attribution therefore remain unavailable. Loot target/mouseover snapshots are explicitly **candidates**. The addon does not infer drop rates, quest prerequisites, or causality from timing alone.
+The current client restricts the combat-log feed, so direct kill tracking remains unavailable. Loot slots retain source GUIDs when a guarded native API read supplies readable pairs, with its undocumented return contract labeled **unverified**. Target/mouseover snapshots and matching receipt links remain **candidates**. Items and creatures share this source evidence in the export; confirmed drop attribution still needs in-game validation. The addon does not infer drop rates, quest prerequisites, or causality from timing alone.
 
 This records exposed gameplay evidence, not every server action. It excludes private conversations, player names/GUIDs, Battle.net identifiers, arbitrary raw event payloads, and inaccessible values. Recipe capture covers the viewed profession and newly learned recipe IDs; it is not a complete catalog scan. See [coverage and schema](docs/implementation.md) for limits.
 

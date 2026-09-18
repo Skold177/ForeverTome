@@ -246,6 +246,7 @@ class CatalogBuilder:
     def _unit(self, row, path, role):
         if not isinstance(row, dict):
             return
+        entity   = None
         identity = row.get("creature_id")
         if _identifier(identity):
             entity = self._entity("npc", identity, role, f"{path}.creature_id")
@@ -255,6 +256,25 @@ class CatalogBuilder:
         position = row.get("entity_position")
         if isinstance(position, dict) and _identifier(position.get("map_id")):
             self._entity("map", f"map:{position['map_id']}", "entity_position_map", f"{path}.entity_position.map_id")
+        return entity
+
+    def _loot(self, data, item):
+        if self._kind not in {"loot.visible", "item.received"}:
+            return
+        if not any(field in data for field in ("sources", "source_candidates", "loot_session_id")):
+            return
+        provenance = _fields(data, {
+            "item_id", "link", "quantity", "loot_session_id", "slot", "revision",
+            "loot_slot", "loot_revision", "loot_match_status", "source_status",
+            "source_quantity_matches", "source_method", "source_mapping_status", "sources", "source_candidates",
+        })
+        self._fact(item, "data", provenance, "loot.provenance")
+        mapped      = data.get("source_status") == "mapped" and data.get("source_quantity_matches") is not False
+        source_role = "loot_source" if mapped and data.get("source_mapping_status") != "unverified" else "loot_candidate"
+        for field, role in (("sources", source_role), ("source_candidates", "loot_candidate")):
+            for index, row in _rows(data.get(field)):
+                entity = self._unit(row, f"data.{field}[{index}]", role)
+                self._fact(entity, "data", provenance, "loot.provenance")
 
     def _currency(self, row, path, role, field="currency_id", namespace=None):
         identity = row.get(field)
@@ -408,7 +428,8 @@ class CatalogBuilder:
             ("mouseover_candidate", "loot_candidate"),
         ):
             self._unit(data.get(field), f"data.{field}", role)
-        self._item(data, "data", "item")
+        item = self._item(data, "data", "item")
+        self._loot(data, item)
         self._quest(data, "data", "quest")
         self._spell(data, "data", "spell")
         self._currency(data, "data", "currency")
