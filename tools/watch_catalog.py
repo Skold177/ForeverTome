@@ -1,4 +1,4 @@
-"""Automatically catalog each saved WoW recording into local JSON snapshots."""
+"""Append saved WoW observations to cumulative category JSON files."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ import os
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import export_saved_variables as saved
-from tools.build_catalog import FORMAT, SCHEMA_VERSION, build_catalog, catalog_export_id
+from tools.build_catalog import FORMAT, SCHEMA_VERSION, build_catalog, catalog_export_id, validate_catalog
+from tools.catalog_merge import merge_category, validate_history
 
 
 CATEGORY_FORMAT = "forevertome.catalog-category"
@@ -78,7 +78,7 @@ def category_catalog(document: dict, category: str) -> dict:
     return result
 
 
-def atomic_write(path: Path, encoded: bytes, replace: bool = True) -> tuple:
+def atomic_write(path: Path, encoded: bytes) -> tuple:
     descriptor, temporary = tempfile.mkstemp(prefix=".catalog-", suffix=".tmp", dir=path.parent)
     temporary_path        = Path(temporary)
     try:
@@ -87,10 +87,7 @@ def atomic_write(path: Path, encoded: bytes, replace: bool = True) -> tuple:
             stream.flush()
             os.fsync(stream.fileno())
         written = temporary_path.stat()
-        if replace:
-            os.replace(temporary_path, path)
-        else:
-            os.link(temporary_path, path)
+        os.replace(temporary_path, path)
         return written.st_size, written.st_mtime_ns, written.st_ino
     finally:
         temporary_path.unlink(missing_ok=True)
@@ -115,8 +112,13 @@ class CatalogWatcher:
         return identity[0] if identity else None
 
     def existing_identity(self, name: str) -> tuple | None:
-        path            = self.outputs[name]
-        expected_format = FORMAT if name == "latest" else CATEGORY_FORMAT
+        document = self.read_catalog(self.outputs[name], None if name == "latest" else name)
+        if document is None:
+            return None
+        return document["source"]["sha256"], document["exportId"]
+
+    def read_catalog(self, path: Path, category: str | None = None) -> dict | None:
+        expected_format = CATEGORY_FORMAT if category else FORMAT
         saved.require(not path.is_symlink(), f"Output {path.name} must not be a symbolic link")
         if not path.exists():
             return None
@@ -129,12 +131,28 @@ class CatalogWatcher:
         saved.require(isinstance(document, dict) and document.get("format") == expected_format
                       and document.get("schemaVersion") == SCHEMA_VERSION,
                       f"Refusing to replace an unrelated {path.name}")
-        if name != "latest":
-            saved.require(document.get("category") == name, f"Refusing to replace an unrelated {path.name} category")
+        if category:
+            saved.require(document.get("category") == category, f"Refusing to replace an unrelated {path.name} category")
         source = document.get("source")
         saved.require(isinstance(source, dict) and isinstance(source.get("sha256"), str)
                       and isinstance(document.get("exportId"), str), f"Invalid {path.name} catalog source")
-        return source["sha256"], document["exportId"]
+        return document
+
+    def legacy_catalogs(self, latest: dict | None):
+        for path in sorted(self.output_dir.glob("catalog-*.json")):
+            document = self.read_catalog(path)
+            saved.require(document is not None, f"Snapshot disappeared: {path.name}")
+            try:
+                validate_catalog(document)
+            except (KeyError, TypeError, AttributeError) as error:
+                raise saved.ExportError(f"Invalid legacy catalog {path.name}") from error
+            yield document
+        if latest is not None:
+            try:
+                validate_catalog(latest)
+            except (KeyError, TypeError, AttributeError) as error:
+                raise saved.ExportError("Invalid legacy latest.json") from error
+            yield latest
 
     def output_file_signature(self, path: Path) -> tuple | None:
         saved.require(not path.is_symlink(), f"Output {path.name} must not be a symbolic link")
@@ -150,7 +168,10 @@ class CatalogWatcher:
         signatures = {name: self.output_file_signature(path) for name, path in self.outputs.items()}
         if signature == self.signature and all(signatures.values()) and signatures == self.output_signatures:
             return None
-        existing         = {name: self.existing_identity(name) for name in self.outputs}
+        previous         = {name: self.read_catalog(path, None if name == "latest" else name)
+                            for name, path in self.outputs.items()}
+        existing         = {name: (view["source"]["sha256"], view["exportId"]) if view else None
+                            for name, view in previous.items()}
         database, digest = saved.read_stable(self.source)
         identity         = (digest, catalog_export_id(digest))
         if all(value == identity for value in existing.values()):
@@ -158,24 +179,34 @@ class CatalogWatcher:
             self.output_signatures = signatures
             self.digest            = digest
             return None
-        document = build_catalog(database, digest)
-        encoded  = (json.dumps(document, ensure_ascii=False, sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
-        identity = (digest, document["exportId"])
-        views    = {category: (json.dumps(category_catalog(document, category), ensure_ascii=False,
-                                         sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
-                    for category in CATEGORIES}
-        stamp    = datetime.fromtimestamp(stat.st_mtime, timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        snapshot = self.output_dir / f"catalog-{stamp}-{document['exportId']}.json"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            atomic_write(snapshot, encoded, replace=False)
-        except FileExistsError:
-            saved.require(snapshot.is_file() and not snapshot.is_symlink()
-                          and snapshot.read_bytes() == encoded, "Conflicting catalog snapshot")
-        existing = {name: self.existing_identity(name) for name in self.outputs}
+        document  = build_catalog(database, digest)
+        encoded   = (json.dumps(document, ensure_ascii=False, sort_keys=True, allow_nan=False, indent=2) + "\n").encode("utf-8")
+        identity  = (digest, document["exportId"])
+        migrating = [category for category in CATEGORIES if previous[category] is None
+                     or previous[category].get("generatorVersion") != document["generatorVersion"]]
+        if migrating:
+            for legacy in self.legacy_catalogs(previous["latest"]):
+                validate_history((view for name, view in previous.items() if name != "latest" and view), legacy)
+                for category in migrating:
+                    previous[category] = merge_category(previous[category], category_catalog(legacy, category))
+        validate_history((view for name, view in previous.items() if name != "latest" and view), document)
+        categories = {category: merge_category(previous[category], category_catalog(document, category))
+                      for category in CATEGORIES if category != "monsters"}
+        npcs       = categories["npcs"]
+        monsters   = category_catalog({
+            **document, "contexts": npcs["contexts"], "sessions": npcs["sessions"],
+            "catalog": {"npcs": npcs["entries"]}, "transactions": [], "observations": npcs["records"],
+        }, "monsters")
+        categories["monsters"] = merge_category(previous["monsters"], monsters)
+        views = {category: (json.dumps(categories[category], ensure_ascii=False, sort_keys=True,
+                                      allow_nan=False, indent=2) + "\n").encode("utf-8")
+                 for category in CATEGORIES}
         current = self.source.stat()
         saved.require(signature == (current.st_size, current.st_mtime_ns, current.st_ino),
                       "Input changed during catalog conversion; waiting for the next save check")
+        saved.require(signatures == {name: self.output_file_signature(path) for name, path in self.outputs.items()},
+                      "Output changed during catalog conversion; waiting for the next save check")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         for category, content in views.items():
             if existing[category] != identity:
                 signatures[category] = atomic_write(self.outputs[category], content)
@@ -190,7 +221,7 @@ class CatalogWatcher:
 def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="Live SavedVariables/ForeverTome.lua (read only)")
-    parser.add_argument("--output-dir", type=Path, required=True, help="Folder for category JSON files, latest.json and dated snapshots")
+    parser.add_argument("--output-dir", type=Path, required=True, help="Folder for cumulative category JSON files and latest.json")
     parser.add_argument("--interval", type=float, default=2, help="Seconds between save checks (default: 2)")
     parser.add_argument("--once", action="store_true", help="Convert the current save and exit")
     options = parser.parse_args(arguments)

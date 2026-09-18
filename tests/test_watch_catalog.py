@@ -39,12 +39,12 @@ class CatalogWatcherTests(unittest.TestCase):
         self.raw = source_bytes(database)
         self.source.write_bytes(self.raw)
 
-    def test_first_sync_creates_snapshot_and_unchanged_or_restarted_sync_skips(self):
+    def test_first_sync_creates_categories_without_snapshots_and_restarted_sync_skips(self):
         document = self.watcher.sync()
         latest   = self.output_dir / "latest.json"
         files    = {path.name: path.read_bytes() for path in self.output_dir.glob("*.json")}
         modified = latest.stat().st_mtime_ns
-        self.assertEqual(len(files), 9)
+        self.assertEqual(len(files), 8)
         self.assertEqual(json.loads(latest.read_text(encoding="utf-8")), document)
         for name, raw in files.items():
             if name in {f"{category}.json" for category in watch.CATEGORIES}:
@@ -57,18 +57,19 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual({path.name: path.read_bytes() for path in self.output_dir.glob("*.json")}, files)
         self.assertEqual(self.source.read_bytes(), self.raw)
 
-    def test_new_save_advances_latest_and_preserves_earlier_snapshot(self):
-        first     = self.watcher.sync()
-        snapshots = {path.name: path.read_bytes() for path in self.output_dir.glob("catalog-*.json")}
+    def test_new_save_appends_evidence_without_creating_snapshots(self):
+        first = self.watcher.sync()
         self.write_next_save()
         second = self.watcher.sync()
         self.assertIsNotNone(second)
         self.assertNotEqual(first["source"]["sha256"], second["source"]["sha256"])
         self.assertEqual(second["summary"]["observationCount"], 2)
-        self.assertEqual(len(list(self.output_dir.glob("catalog-*.json"))), 2)
+        self.assertFalse(list(self.output_dir.glob("catalog-*.json")))
         self.assertEqual(json.loads((self.output_dir / "latest.json").read_text(encoding="utf-8")), second)
-        for name, raw in snapshots.items():
-            self.assertEqual((self.output_dir / name).read_bytes(), raw)
+        items = json.loads((self.output_dir / "items.json").read_bytes())
+        self.assertEqual(len(items["entries"]), 1)
+        self.assertEqual(len(items["records"]), 2)
+        self.assertEqual(len(items["entries"][0]["sourceIds"]), 2)
         self.assertEqual(self.source.read_bytes(), self.raw)
         self.assertIsNone(self.watcher.sync())
 
@@ -114,6 +115,141 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(monsters["selection"]["method"], "observed_reaction")
         self.assertEqual(len(items["records"]), 3)
 
+    def test_cleared_history_and_new_session_keep_previous_category_evidence(self):
+        first = self.watcher.sync()
+        self.source.write_bytes(source_bytes(make_database()))
+        cleared = watch.CatalogWatcher(self.source, self.output_dir).sync()
+        self.assertEqual(cleared["summary"]["observationCount"], 0)
+        items = json.loads((self.output_dir / "items.json").read_bytes())
+        self.assertEqual(items["entries"], first["catalog"]["items"])
+        self.assertEqual(len(items["records"]), 1)
+        session = make_session(2, [
+            ("item.received", {"item_id": 100, "quantity": 3}),
+            ("item.metadata", {"item_id": 200, "name": "New item"}),
+        ])
+        database                 = make_database(session)
+        database["next_session"] = 2
+        self.source.write_bytes(source_bytes(database))
+        restarted = watch.CatalogWatcher(self.source, self.output_dir)
+        latest    = restarted.sync()
+        items     = json.loads((self.output_dir / "items.json").read_bytes())
+        self.assertEqual({entry["nativeId"] for entry in items["entries"]}, {100, 200})
+        self.assertEqual(items["entries"][0]["display"]["name"], "Synthetic watcher item")
+        self.assertEqual(len(items["entries"][0]["sourceIds"]), 2)
+        self.assertEqual(len(items["records"]), 3)
+        self.assertEqual(len(items["sessions"]), 2)
+        self.assertEqual(items["source"], latest["source"])
+        self.assertEqual(latest["summary"]["observationCount"], 2)
+        self.assertIsNone(restarted.sync())
+        self.assertIsNone(watch.CatalogWatcher(self.source, self.output_dir).sync())
+        self.assertFalse(list(self.output_dir.glob("catalog-*.json")))
+
+    def test_overlapping_saves_merge_facts_variants_and_partial_retry_once(self):
+        first = make_session(1, [
+            ("item.metadata", {"item_id": 100, "name": "Variant A", "link": LINK_A}),
+        ])
+        second = make_session(2, [
+            ("item.metadata", {"item_id": 100, "name": "Variant A", "link": LINK_A}),
+            ("item.metadata", {"item_id": 100, "name": "Variant B", "link": LINK_B}),
+        ])
+        self.source.write_bytes(source_bytes(make_database(first)))
+        self.watcher.sync()
+        self.source.write_bytes(source_bytes(make_database(first, second)))
+        replace = watch.os.replace
+
+        def fail_latest(source, destination):
+            if Path(destination).name == "latest.json":
+                raise OSError("synthetic final publication failure")
+            return replace(source, destination)
+
+        with patch.object(watch.os, "replace", side_effect=fail_latest):
+            with self.assertRaises(OSError):
+                self.watcher.sync()
+        watch.CatalogWatcher(self.source, self.output_dir).sync()
+        items = json.loads((self.output_dir / "items.json").read_bytes())
+        entry = items["entries"][0]
+        self.assertEqual(len(items["records"]), 3)
+        self.assertEqual(len(entry["sourceIds"]), 3)
+        self.assertEqual(len(entry["facts"]), 2)
+        self.assertEqual(sorted(len(fact["sourceIds"]) for fact in entry["facts"]), [1, 2])
+        self.assertEqual(len(entry["variants"]), 2)
+        self.assertEqual(sorted(len(variant["sourceIds"]) for variant in entry["variants"]), [1, 2])
+
+    def test_monster_selection_includes_npc_evidence_across_cleared_saves(self):
+        for serial, reaction in enumerate((5, 2, 5), 1):
+            session = make_session(serial, [
+                ("unit.sighting", {"creature_id": 10, "name": "Changing reaction", "reaction": reaction}),
+            ])
+            database                 = make_database(session)
+            database["next_session"] = serial
+            self.source.write_bytes(source_bytes(database))
+            watch.CatalogWatcher(self.source, self.output_dir).sync()
+        monsters = json.loads((self.output_dir / "monsters.json").read_bytes())
+        npcs     = json.loads((self.output_dir / "npcs.json").read_bytes())
+        self.assertEqual(monsters["entries"], npcs["entries"])
+        self.assertEqual(monsters["records"], npcs["records"])
+        self.assertEqual(len(monsters["records"]), 3)
+
+    def test_conflicting_observation_rejects_entire_export_without_writes(self):
+        self.watcher.sync()
+        before = {path.name: path.read_bytes() for path in self.output_dir.iterdir()}
+        self.source.write_bytes(source_bytes(make_database(make_session(1, [
+            ("item.metadata", {"item_id": 100, "name": "Conflicting name"}),
+        ]))))
+        with self.assertRaisesRegex(ValueError, "[Cc]onflict"):
+            self.watcher.sync()
+        self.assertEqual({path.name: path.read_bytes() for path in self.output_dir.iterdir()}, before)
+
+    def test_conflicting_observation_cannot_move_between_categories(self):
+        self.watcher.sync()
+        before = {path.name: path.read_bytes() for path in self.output_dir.iterdir()}
+        for kind, data in (("spell.metadata", {"spell_id": 200, "name": "Conflicting spell"}),
+                           ("player.state", {"state_event": "SYNTHETIC"})):
+            with self.subTest(kind=kind):
+                self.source.write_bytes(source_bytes(make_database(make_session(1, [(kind, data)]))))
+                with self.assertRaisesRegex(ValueError, "[Cc]onflict"):
+                    self.watcher.sync()
+                self.assertEqual({path.name: path.read_bytes() for path in self.output_dir.iterdir()}, before)
+
+    def test_upgrade_recovers_rotated_history_from_legacy_snapshots_and_latest(self):
+        with patch.dict(watch.build_catalog.__globals__, {"GENERATOR_VERSION": "0.2.4"}):
+            old = self.watcher.sync()
+        snapshot = self.output_dir / f"catalog-20260101T000000Z-{old['exportId']}.json"
+        snapshot.write_text(json.dumps(old), encoding="utf-8")
+        before = snapshot.read_bytes()
+        session = make_session(2, [("item.metadata", {"item_id": 200, "name": "Latest legacy item"})])
+        database                 = make_database(session)
+        database["next_session"] = 2
+        with patch.dict(watch.build_catalog.__globals__, {"GENERATOR_VERSION": "0.2.4"}):
+            legacy = watch.build_catalog(database, "b" * 64)
+        for category in watch.CATEGORIES:
+            (self.output_dir / f"{category}.json").write_text(
+                json.dumps(watch.category_catalog(legacy, category)), encoding="utf-8")
+        (self.output_dir / "latest.json").write_text(json.dumps(legacy), encoding="utf-8")
+        self.source.write_bytes(source_bytes(make_database()))
+        restarted = watch.CatalogWatcher(self.source, self.output_dir)
+        document  = restarted.sync()
+        items     = json.loads((self.output_dir / "items.json").read_bytes())
+        self.assertEqual(document["summary"]["observationCount"], 0)
+        self.assertEqual({entry["nativeId"] for entry in items["entries"]}, {100, 200})
+        self.assertEqual(len(items["records"]), 2)
+        self.assertEqual(snapshot.read_bytes(), before)
+        self.assertEqual(list(self.output_dir.glob("catalog-*.json")), [snapshot])
+        self.assertIsNone(restarted.sync())
+        self.assertIsNone(watch.CatalogWatcher(self.source, self.output_dir).sync())
+
+    def test_invalid_legacy_snapshot_is_preserved_before_any_writes(self):
+        with patch.dict(watch.build_catalog.__globals__, {"GENERATOR_VERSION": "0.2.4"}):
+            document = self.watcher.sync()
+        snapshot = self.output_dir / "catalog-20260101T000000Z-invalid.json"
+        for invalid in ({"format": "foreign"}, {**document, "catalog": []}):
+            with self.subTest(invalid=invalid["format"]):
+                snapshot.write_text(json.dumps(invalid), encoding="utf-8")
+                before = {path.name: path.read_bytes() for path in self.output_dir.iterdir()}
+                with self.assertRaises(ValueError):
+                    watch.CatalogWatcher(self.source, self.output_dir).sync()
+                self.assertEqual({path.name: path.read_bytes() for path in self.output_dir.iterdir()}, before)
+
     def test_category_records_include_related_closure_in_session_sequence_order(self):
         session = make_session(1, [
             ("player.state", {"state_event": "SYNTHETIC"}),
@@ -156,9 +292,11 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(latest.stat().st_mtime_ns, modified)
         self.assertIsNone(restarted.sync())
 
-    def test_generator_upgrade_rebuilds_unchanged_save_and_preserves_old_snapshot(self):
+    def test_generator_upgrade_rebuilds_unchanged_save_without_new_snapshots(self):
         with patch.dict(watch.build_catalog.__globals__, {"GENERATOR_VERSION": "0.2.2"}):
             first = self.watcher.sync()
+        snapshot = self.output_dir / f"catalog-20260101T000000Z-{first['exportId']}.json"
+        snapshot.write_text(json.dumps(first), encoding="utf-8")
         snapshots = {path.name: path.read_bytes() for path in self.output_dir.glob("catalog-*.json")}
         self.assertEqual(len(snapshots), 1)
         self.assertTrue(all(first["exportId"] in name for name in snapshots))
@@ -168,7 +306,7 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(second["source"], first["source"])
         self.assertNotEqual(second["generatorVersion"], first["generatorVersion"])
         self.assertNotEqual(second["exportId"], first["exportId"])
-        self.assertEqual(len(list(self.output_dir.glob("catalog-*.json"))), 2)
+        self.assertEqual(len(list(self.output_dir.glob("catalog-*.json"))), 1)
         for name, raw in snapshots.items():
             self.assertEqual((self.output_dir / name).read_bytes(), raw)
         for category in watch.CATEGORIES:
@@ -261,11 +399,11 @@ class CatalogWatcherTests(unittest.TestCase):
         self.assertEqual(self.source.read_bytes(), self.raw)
         self.assertEqual(self.watcher.sync()["summary"]["observationCount"], 2)
 
-    def test_failed_snapshot_publication_keeps_all_previous_files_and_recovers(self):
+    def test_failed_category_publication_keeps_all_previous_files_and_recovers(self):
         self.watcher.sync()
         before = {path.name: path.read_bytes() for path in self.output_dir.iterdir()}
         self.write_next_save()
-        with patch.object(watch.os, "link", side_effect=OSError("synthetic publication failure")):
+        with patch.object(watch.os, "replace", side_effect=OSError("synthetic publication failure")):
             with self.assertRaises(OSError):
                 self.watcher.sync()
         self.assertEqual({path.name: path.read_bytes() for path in self.output_dir.iterdir()}, before)

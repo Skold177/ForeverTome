@@ -20,7 +20,7 @@ Uninstall **ForeverTome Exporter** through Windows Settings to remove the compan
 4. Select **Export now** for a single conversion, or **Start watching** to check for changes every two seconds while the application is open.
 5. Use `/reload` or normal logout in WoW whenever you want the addon to save its observations to disk. The application cannot see observations still held in game memory.
 
-The window shows conversion status, category counts, and errors. **Open export folder** opens the destination in File Explorer. Your chosen source file and output folder are remembered locally for the next launch; opening the application does not automatically start watching.
+The window shows conversion status, cumulative category counts, and errors. Observation and transaction totals describe the current save. **Open export folder** opens the destination in File Explorer. Your chosen source file and output folder are remembered locally for the next launch; opening the application does not automatically start watching.
 
 **Stop** stops further checks. Closing the window stops watching and exits the application after any export or addon operation already in progress finishes safely. The window stays visible while it finishes. There is no tray mode, background service, or Windows startup task. Run only one exporter for each output folder, including any command-line watcher previously started there.
 
@@ -28,9 +28,13 @@ Exporting reads SavedVariables through the restricted data parser without execut
 
 ## Output files
 
-The destination contains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`, together with the complete `latest.json` and dated full snapshots. JSON files use two-space indentation and line breaks for readability. After upgrading the companion, export once to refresh existing category files and `latest.json` even if the saved recording has not changed. Earlier snapshots remain unchanged. Repeated checks skip unchanged saves, and incomplete saves are retried while watching. Existing snapshots remain available after the addon's history is cleared.
+The destination contains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`. Each category accumulates evidence across saves, including entries, supporting records, sessions, and contexts. New evidence is merged by ID, identical observations are kept once, and conflicting content under the same observation ID is rejected. Exported history remains after the addon is cleared or the application restarts, provided you keep using the same output folder. Export successfully before clearing the addon.
 
-Each JSON file is replaced atomically. If another application reads several categories at once, it must check that their `exportId` values match. Unavailable game data remains unavailable; converting a recording does not supply missing item stats, enemy abilities, exact resource-node positions, or confirmed loot sources. See the [catalog format](website-catalog.md) for fields and interpretation limits.
+`latest.json` contains the complete current save; the window's summary also describes that save. The application no longer creates dated `catalog-*.json` snapshots. On the first export with generator version 0.2.5, existing dated snapshots and `latest.json` are merged into the category history. Original snapshots remain untouched. Export once after upgrading, even if the saved recording has not changed.
+
+JSON files use two-space indentation and line breaks for readability. Repeated checks skip unchanged saves, and incomplete saves are retried while watching. Keep backups of the category files: they retain history that may no longer exist in SavedVariables.
+
+Each JSON file is replaced atomically. If another application reads several categories at once, it must check that their `exportId` values match. This ID and `source` describe the latest processed save; they do not identify all accumulated evidence. Unavailable game data remains unavailable; converting a recording does not supply missing item stats, enemy abilities, exact resource-node positions, or confirmed loot sources. See the [catalog format](website-catalog.md) for fields and interpretation limits.
 
 ## Run from source
 
@@ -72,6 +76,6 @@ py tools/package_installer.py
 
 The command produces `dist/installer/ForeverTomeSetup.exe` without running the installer. It finds `ISCC.exe` on `PATH` or in the usual Inno Setup 6 installation folders. For an existing compiler in another location, use `--compiler 'C:\BuildTools\Inno Setup 6\ISCC.exe'`. Use `--bundle-dir` and `--output-dir` to select other input and output folders.
 
-The installer script is `installer/ForeverTomeExporter.iss`. Its application version is **0.1.1**, separate from the WoW addon's version. It installs only the executable, license, and short readme. Addon discovery and installation run in the visible application after setup, when the user selects **Install / update addon**. No user settings, recordings, or generated catalogs are included in the setup payload.
+The installer script is `installer/ForeverTomeExporter.iss`. Its application version is **0.1.2**, separate from the WoW addon's version. It installs only the executable, license, and short readme. Addon discovery and installation run in the visible application after setup, when the user selects **Install / update addon**. No user settings, recordings, or generated catalogs are included in the setup payload.
 
 The reference compiler is **Inno Setup 6.7.3**, available from the [official download page](https://jrsoftware.org/isdl.php). Compiler setup is a separate developer prerequisite, not an action performed by this repository's build tools. Its per-user installer configuration follows Inno Setup's [privilege settings](https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm); the uninstall script deliberately has no additional file-deletion rules.
