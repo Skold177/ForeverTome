@@ -37,7 +37,13 @@ still uses the application's Install / update addon button. Uninstalling the com
 preserves the WoW addon, recordings, exported JSON, and application settings.
 
 Outputs: spells.json, talents.json, items.json, quests.json, monsters.json,
-npcs.json, gathering.json, latest.json, and dated full snapshots.
+npcs.json, gathering.json, and latest.json. Categories accumulate evidence by ID
+across saves and retain exported history after addon clearing or app restarts.
+Export successfully before clearing the addon, and keep the same output folder.
+latest.json and the window summary describe the current save.
+No new dated snapshots are created. The first export after upgrading backfills
+category history from existing snapshots and latest.json without changing snapshots.
+Keep backups of the category files to preserve accumulated history.
 The application reads SavedVariables without modifying or executing it.
 Nothing is uploaded. Use only one exporter for each output folder.
 

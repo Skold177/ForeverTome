@@ -55,7 +55,7 @@ Spellbooks and talents are sampled automatically on entering the world and relev
 
 ## Desktop exporter
 
-Open **ForeverTome Exporter** from the Start menu, or run **ForeverTomeExporter.exe** directly. Its **Install / update addon** tab finds the game and installs or updates the latest merged addon. In **Export recordings**, select your account's `SavedVariables/ForeverTome.lua` and an output folder, then click **Export now** or **Start watching**. The application maintains separate JSON files for spells, talents, items, quests, monsters, NPCs, and gathering, plus the complete catalog and dated snapshots. Use `/reload` or normal logout in WoW to save new observations first.
+Open **ForeverTome Exporter** from the Start menu, or run **ForeverTomeExporter.exe** directly. Its **Install / update addon** tab finds the game and installs or updates the latest merged addon. In **Export recordings**, select your account's `SavedVariables/ForeverTome.lua` and an output folder, then click **Export now** or **Start watching**. The application appends new evidence to separate JSON files for spells, talents, items, quests, monsters, NPCs, and gathering. These files retain previously exported history after the addon is cleared or the exporter restarts. `latest.json` contains the complete current save. Use `/reload` or normal logout in WoW to save new observations first.
 
 The window shows status, provides **Stop** and **Open export folder**, and remembers your selected paths. Closing it stops watching and exits after any current conversion finishes. It does not run in the tray, start with Windows, or upload data. The packaged executable does not require Python to be installed. See [desktop exporter instructions and build steps](docs/desktop-exporter.md).
 
@@ -94,7 +94,9 @@ Use the [desktop exporter](docs/desktop-exporter.md) to control automatic conver
 py tools/watch_catalog.py 'D:\World of Warcraft\_classic_beta_\WTF\Account\<account>\SavedVariables\ForeverTome.lua' --output-dir 'C:\Exports\ForeverTome'
 ```
 
-The watcher checks every two seconds and maintains `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`, plus the full `latest.json` and dated snapshots. Each category retains detailed captured fields and supporting records. Shared export IDs identify files from the same save. Gathering records supported successful harvesting, mining, and skinning casts with the player's observed location; resource identities and exact node positions remain unknown.
+The watcher checks every two seconds and appends new evidence by ID to `spells.json`, `talents.json`, `items.json`, `quests.json`, `monsters.json`, `npcs.json`, and `gathering.json`. Repeated observations are kept once; conflicting content under the same observation ID is rejected. Category files accumulate captured fields and supporting records across saves, while `latest.json` and the desktop summary describe the current save. No new dated `catalog-*.json` files are created. On the first export after upgrading, existing dated snapshots and `latest.json` are included in the category history; original snapshots remain untouched.
+
+Gathering records supported successful harvesting, mining, and skinning casts with the player's observed location; resource identities and exact node positions remain unknown. Shared export IDs identify the latest processed save, not the complete accumulated history.
 
 It waits for WoW to save through `/reload` or logout, retries incomplete saves, and stops with Ctrl+C. Individual files are replaced atomically; consumers reading several files should require matching export IDs. Nothing is installed to run at Windows startup.
 

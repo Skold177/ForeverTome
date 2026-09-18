@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT             = Path(__file__).resolve().parents[1]
 LUA_MINIMUMS     = {"core": 18, "quests": 9, "loot": 10, "world": 10, "spells": 10, "talents": 17}
 PYTHON_MINIMUMS  = {"test_export": 13, "test_gate": 8, "test_package": 3, "test_catalog": 21,
-                    "test_watch_catalog": 16, "test_gathering_catalog": 4, "test_desktop_exporter": 15,
+                    "test_watch_catalog": 23, "test_catalog_merge": 11, "test_gathering_catalog": 4, "test_desktop_exporter": 15,
                     "test_addon_installer": 14}
 PYTHON_MINIMUM   = sum(PYTHON_MINIMUMS.values())
 INTERPRETER_TEST = 'assert(_VERSION == "Lua 5.1" and type(setfenv) == "function", "Lua 5.1 with setfenv required"); io.write(_VERSION)'

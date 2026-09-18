@@ -21,7 +21,7 @@ from tools.catalog_entities import CatalogBuilder
 
 FORMAT            = "forevertome.website-catalog"
 SCHEMA_VERSION    = 1
-GENERATOR_VERSION = "0.2.4"
+GENERATOR_VERSION = "0.2.5"
 TRANSACTION_KINDS = frozenset("""
 quest.accepted quest.turned_in quest.reward_received quest.removed quest.objective_delta quest.ready
 item.received inventory.delta loot.opened loot.slot_cleared loot.closed merchant.opened merchant.closed
