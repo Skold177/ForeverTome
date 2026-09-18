@@ -73,7 +73,7 @@ class PackageTests(unittest.TestCase):
 
     def test_exporter_build_stamps_the_manifest_version_into_its_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
-            root       = Path(directory)
+            root       = Path(directory).resolve()
             output     = root / "bundle"
             source     = root / "ForeverTome"
             entry      = root / "tools" / "exporter_app.py"
@@ -121,7 +121,7 @@ class PackageTests(unittest.TestCase):
 
     def test_installer_uses_the_selected_bundles_version_and_rejects_invalid_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
-            root       = Path(directory)
+            root       = Path(directory).resolve()
             bundle     = root / "bundle"
             output     = root / "setup"
             compiler   = root / "ISCC.exe"
