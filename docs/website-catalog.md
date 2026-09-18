@@ -30,6 +30,8 @@ It checks the saved file every two seconds. Each new saved content produces a da
 
 The same folder contains separate `items.json`, `spells.json`, `talents.json`, `quests.json`, `npcs.json`, `monsters.json`, and `gathering.json`. Each uses `format: "forevertome.catalog-category"` with a `category`, `entries`, supporting `records`, and the relevant `sessions`. Records include every referenced observation and its related-record dependencies, preserving locations, capture times, variants, and partial reads. Entity links may point into another category; resolve them by stable entity keys. The [category schema](../schemas/catalog-category-v1.schema.json) describes the envelope.
 
+The watcher writes all JSON files with two-space indentation and line breaks. Generator version 0.2.4 refreshes existing category files and `latest.json` on the next export even when the saved recording is unchanged, and writes a new formatted snapshot while preserving earlier snapshots.
+
 Each file publishes atomically. They share `exportId` and `generatorVersion` with `latest.json`; an importer reading multiple files must check that their export IDs agree. A partial multi-file update is retried on the next check. The complete immutable snapshot is the single-file source for an entire generation. The watcher repairs missing or stale category files without requiring another game save.
 
 Treat generated files as read-only. The watcher recognizes existing generations by their source hash and export ID; it does not detect manual content edits that preserve those identifiers. Delete an edited category file to regenerate it from the save.
